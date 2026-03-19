@@ -9,8 +9,19 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        cream: "var(--cream)",
+        "cream-dark": "var(--cream-dark)",
+        ink: "var(--ink)",
+        "ink-muted": "var(--ink-muted)",
+        "ink-subtle": "var(--ink-subtle)",
+        brand: "var(--brand)",
+        "brand-hover": "var(--brand-hover)",
+        "brand-muted": "var(--brand-muted)",
+        border: "var(--border)",
+      },
+      boxShadow: {
+        "brand-sm": "var(--shadow-sm)",
+        "brand-md": "var(--shadow-md)",
       },
     },
   },
