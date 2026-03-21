@@ -1,5 +1,16 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+**Part Scout admin dashboard** — business metrics from Supabase + Stripe. **MRR (total)** = Stripe recurring (API) + **Clerk Billing** estimated from `users` rows (plan slug × configured monthly price). Users with an active Stripe subscription are excluded from the Clerk sum to avoid double counting.
+
+Optional in `.env.local`:
+
+```bash
+# JSON: Clerk plan slug -> monthly USD (merges over defaults, e.g. founding_member → 199)
+CLERK_PLAN_MRR_USD={"founding_member":199}
+```
+
+Also set `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `STRIPE_SECRET_KEY` as needed.
+
 ## Getting Started
 
 First, run the development server:

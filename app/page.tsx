@@ -1,5 +1,6 @@
 import { getServiceRoleClient } from "@/lib/supabase";
 import { getStripe } from "@/lib/stripe";
+import { computeClerkMrr } from "@/lib/clerk-mrr";
 import { fetchInboxMessages } from "@/lib/gmail";
 import { MetricCard } from "@/components/MetricCard";
 import { BarChart } from "@/components/BarChart";
@@ -97,6 +98,12 @@ export default async function Dashboard() {
 
   // Users
   const users = allUsers ?? [];
+  const {
+    clerkMrr,
+    clerkMrrSubscriberCount,
+    unpricedPlanSlugs,
+  } = computeClerkMrr(users);
+  const totalMrr = Math.round((stripe.mrr + clerkMrr) * 100) / 100;
   type U = typeof users[number];
   const isPaid = (u: U) =>
     (u.clerk_subscription_status === "active" && u.clerk_plan_slug !== "free_user" && u.clerk_plan_slug !== null) ||
@@ -156,14 +163,37 @@ export default async function Dashboard() {
         </div>
 
         {/* ── Revenue ── */}
-        <Section title="💰 Revenue" sub="Stripe subscription and payment data" />
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5 mb-6">
-          <MetricCard label="MRR" value={fmt$(stripe.mrr)} color="green" />
-          <MetricCard label="Active Subs" value={stripe.activeSubs} color="green" />
+        <Section
+          title="💰 Revenue"
+          sub="MRR (total) = Stripe API + Clerk Billing (plan prices × active subscribers in Supabase). Legacy Stripe users are not double-counted."
+        />
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 mb-6">
+          <MetricCard
+            label="MRR (total)"
+            value={fmt$(totalMrr)}
+            color="green"
+            subtext={`${fmt$(stripe.mrr)} Stripe + ${fmt$(clerkMrr)} Clerk`}
+          />
+          <MetricCard label="MRR (Stripe)" value={fmt$(stripe.mrr)} color="green" subtext="active subscriptions" />
+          <MetricCard
+            label="MRR (Clerk)"
+            value={fmt$(clerkMrr)}
+            color="green"
+            subtext={`${clerkMrrSubscriberCount} subscriber${clerkMrrSubscriberCount === 1 ? "" : "s"}`}
+          />
+          <MetricCard label="Active Subs" value={stripe.activeSubs} color="green" subtext="Stripe" />
           <MetricCard label="Revenue (30d)" value={fmt$(stripe.rev30d)} subtext={`${stripe.charges30d} charges`} color="green" />
           <MetricCard label="Churned (30d)" value={stripe.canceled30d} color={stripe.canceled30d > 0 ? "red" : "default"} />
           <MetricCard label="Stripe Balance" value={fmt$(stripe.balance)} />
         </div>
+        {unpricedPlanSlugs.length > 0 && (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 mb-6">
+            Clerk MRR omits unknown plan slug(s):{" "}
+            <code className="font-mono">{unpricedPlanSlugs.join(", ")}</code>. Set{" "}
+            <code className="font-mono">CLERK_PLAN_MRR_USD</code> (JSON map) in{" "}
+            <code className="font-mono">.env.local</code>.
+          </p>
+        )}
 
         {stripe.recent.length > 0 ? (
           <div className="rounded-xl border border-border bg-white shadow-brand-sm overflow-hidden mb-10">
