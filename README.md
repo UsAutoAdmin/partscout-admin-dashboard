@@ -8,8 +8,8 @@ Business metrics from **Supabase**, **Stripe**, and **Clerk Billing**.
 
 - **Clerk MRR** (priority order):
   1. **`CLERK_DASHBOARD_MRR_USD`** — paste the exact MRR from the Clerk dashboard (e.g. `597`).
-  2. **Clerk Billing API** — if **`CLERK_SECRET_KEY`** is set and **`CLERK_BILLING_API_MRR`** is not `false`, we call `GET /v1/users` + per-user `GET /v1/users/{id}/billing/subscription` to sum active plan fees (should align with Clerk’s ~$597).
-  3. **Supabase fallback** — count active paid Clerk plans × **`CLERK_PLAN_MRR_USD`** / defaults.
+  2. **Clerk Billing API (live key)** — uses **`CLERK_LIVE_SECRET_KEY`** first, then **`CLERK_SECRET_KEY`** if it is `sk_live_...`; calls `GET /v1/users` + per-user `GET /v1/users/{id}/billing/subscription`.
+  3. **Optional Supabase fallback** — only if **`CLERK_MRR_ALLOW_ESTIMATE=true`**.
 
 - **Stripe MRR** — from Stripe `subscriptions.list`, unless **`STRIPE_MRR_OVERRIDE_USD`** is set (only if the API total doesn’t match what you know you bill—e.g. wrong price or missing sub). Example: **$597** (Clerk) **+ $199** (Stripe) **≈ $796** total.
 
@@ -20,12 +20,20 @@ NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 STRIPE_SECRET_KEY=
 
-# Clerk (from Clerk Dashboard → API Keys) — enables Billing API MRR by default.
-# Use the same instance as your paying users: sk_live_… for production subs; sk_test_… only sees test users (often $0 MRR).
+# Clerk live key for production Billing API MRR (recommended)
+CLERK_LIVE_SECRET_KEY=
+
+# General Clerk key (used only if sk_live_... and CLERK_LIVE_SECRET_KEY not set)
 CLERK_SECRET_KEY=
 
 # Optional: disable Clerk API aggregation (use Supabase estimate only)
 # CLERK_BILLING_API_MRR=false
+
+# Optional: allow Supabase estimate fallback when live Clerk API is unavailable
+# CLERK_MRR_ALLOW_ESTIMATE=true
+
+# Optional: allow sk_test_ key for Clerk MRR (not recommended for production totals)
+# CLERK_MRR_ALLOW_TEST_KEY=true
 
 # Optional: lock Clerk MRR to the number shown in Clerk’s UI
 # CLERK_DASHBOARD_MRR_USD=597

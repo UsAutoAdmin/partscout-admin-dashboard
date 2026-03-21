@@ -164,7 +164,7 @@ export default async function Dashboard() {
         {/* ── Revenue ── */}
         <Section
           title="💰 Revenue"
-          sub="Total = Stripe + Clerk. With CLERK_SECRET_KEY we call Clerk’s Billing API by default (CLERK_BILLING_API_MRR=false to skip). Pin Clerk to your dashboard with CLERK_DASHBOARD_MRR_USD=597. Stripe MRR comes from your Stripe account (e.g. $199); use STRIPE_MRR_OVERRIDE_USD only if the API total is wrong."
+          sub="Total = Stripe + Clerk. Clerk MRR comes from Clerk Billing API using a live key (set CLERK_LIVE_SECRET_KEY or CLERK_SECRET_KEY=sk_live_...). To avoid estimates, leave CLERK_MRR_ALLOW_ESTIMATE unset/false. Stripe MRR comes from your Stripe account (e.g. $199); use STRIPE_MRR_OVERRIDE_USD only if API total is wrong."
         />
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 mb-6">
           <MetricCard
