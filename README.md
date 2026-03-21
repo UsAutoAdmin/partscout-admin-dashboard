@@ -1,50 +1,53 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-**Part Scout admin dashboard** — business metrics from Supabase + Stripe. **MRR (total)** = Stripe recurring (API) + **Clerk Billing** estimated from `users` rows (plan slug × configured monthly price). Users with an active Stripe subscription are excluded from the Clerk sum to avoid double counting.
+## Part Scout admin dashboard
 
-Optional in `.env.local`:
+Business metrics from **Supabase**, **Stripe**, and **Clerk Billing**.
+
+**MRR (total)** = **MRR (Stripe)** + **MRR (Clerk)**.
+
+- **Clerk MRR** (priority order):
+  1. **`CLERK_DASHBOARD_MRR_USD`** — paste the exact MRR from the Clerk dashboard (e.g. `597`).
+  2. **Clerk Billing API** — if **`CLERK_SECRET_KEY`** is set and **`CLERK_BILLING_API_MRR`** is not `false`, we call `GET /v1/users` + per-user `GET /v1/users/{id}/billing/subscription` to sum active plan fees (should align with Clerk’s ~$597).
+  3. **Supabase fallback** — count active paid Clerk plans × **`CLERK_PLAN_MRR_USD`** / defaults.
+
+- **Stripe MRR** — from Stripe `subscriptions.list`, unless **`STRIPE_MRR_OVERRIDE_USD`** is set (e.g. legacy **$99** while the API shows a different amount). Example: **$597 + $99 = $696** total.
+
+### `.env.local` (common)
 
 ```bash
-# JSON: Clerk plan slug -> monthly USD (merges over defaults, e.g. founding_member → 199)
-CLERK_PLAN_MRR_USD={"founding_member":199}
+NEXT_PUBLIC_SUPABASE_URL=
+SUPABASE_SERVICE_ROLE_KEY=
+STRIPE_SECRET_KEY=
 
-# Rare: skip users with stripe_subscription_status=active when summing Clerk MRR (old dedupe; can zero out Clerk if Stripe webhooks touched Clerk payers)
+# Clerk (from Clerk Dashboard → API Keys) — enables Billing API MRR by default
+CLERK_SECRET_KEY=
+
+# Optional: disable Clerk API aggregation (use Supabase estimate only)
+# CLERK_BILLING_API_MRR=false
+
+# Optional: lock Clerk MRR to the number shown in Clerk’s UI
+# CLERK_DASHBOARD_MRR_USD=597
+
+# Optional: legacy/native Stripe MRR if API total is wrong
+# STRIPE_MRR_OVERRIDE_USD=99
+
+# Optional: JSON map of plan slug -> monthly USD (Supabase path only)
+# CLERK_PLAN_MRR_USD={"founding_member":199}
+
+# Rare: Supabase-only Clerk MRR skips stripe_subscription_status=active users
 # CLERK_MRR_EXCLUDE_STRIPE_ACTIVE=true
 ```
 
-Also set `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `STRIPE_SECRET_KEY` as needed.
-
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Open [http://localhost:3000](http://localhost:3000).
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Set the same env vars in the Vercel project (including `CLERK_SECRET_KEY` if you want API-based Clerk MRR).

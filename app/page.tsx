@@ -1,6 +1,6 @@
 import { getServiceRoleClient } from "@/lib/supabase";
 import { getStripe } from "@/lib/stripe";
-import { computeClerkMrr } from "@/lib/clerk-mrr";
+import { resolveClerkMrrForDashboard, applyStripeMrrOverride } from "@/lib/resolve-clerk-mrr";
 import { fetchInboxMessages } from "@/lib/gmail";
 import { MetricCard } from "@/components/MetricCard";
 import { BarChart } from "@/components/BarChart";
@@ -98,12 +98,11 @@ export default async function Dashboard() {
 
   // Users
   const users = allUsers ?? [];
-  const {
-    clerkMrr,
-    clerkMrrSubscriberCount,
-    unpricedPlanSlugs,
-  } = computeClerkMrr(users);
-  const totalMrr = Math.round((stripe.mrr + clerkMrr) * 100) / 100;
+  const stripePart = applyStripeMrrOverride(stripe.mrr);
+  const clerkResolved = await resolveClerkMrrForDashboard(users);
+  const { clerkMrr, clerkMrrSubscriberCount, unpricedPlanSlugs, sourceLabel: clerkMrrSource } =
+    clerkResolved;
+  const totalMrr = Math.round((stripePart.mrr + clerkMrr) * 100) / 100;
   type U = typeof users[number];
   const isPaid = (u: U) =>
     (u.clerk_subscription_status === "active" && u.clerk_plan_slug !== "free_user" && u.clerk_plan_slug !== null) ||
@@ -165,21 +164,26 @@ export default async function Dashboard() {
         {/* ── Revenue ── */}
         <Section
           title="💰 Revenue"
-          sub="MRR (total) = Stripe API + Clerk Billing (plan × price from Supabase). Clerk subs often don’t appear in your Stripe API; we don’t skip users just because stripe_subscription_status is active. Set CLERK_MRR_EXCLUDE_STRIPE_ACTIVE=true if you need the old dedupe."
+          sub="Total = Stripe + Clerk. With CLERK_SECRET_KEY in .env.local we call Clerk’s Billing API by default (set CLERK_BILLING_API_MRR=false to skip). Override Clerk with CLERK_DASHBOARD_MRR_USD=597. If legacy Stripe is ~$99 but API shows more, STRIPE_MRR_OVERRIDE_USD=99 → $696 total."
         />
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 mb-6">
           <MetricCard
             label="MRR (total)"
             value={fmt$(totalMrr)}
             color="green"
-            subtext={`${fmt$(stripe.mrr)} Stripe + ${fmt$(clerkMrr)} Clerk`}
+            subtext={`${fmt$(stripePart.mrr)} Stripe + ${fmt$(clerkMrr)} Clerk`}
           />
-          <MetricCard label="MRR (Stripe)" value={fmt$(stripe.mrr)} color="green" subtext="active subscriptions" />
+          <MetricCard
+            label="MRR (Stripe)"
+            value={fmt$(stripePart.mrr)}
+            color="green"
+            subtext={stripePart.label}
+          />
           <MetricCard
             label="MRR (Clerk)"
             value={fmt$(clerkMrr)}
             color="green"
-            subtext={`${clerkMrrSubscriberCount} subscriber${clerkMrrSubscriberCount === 1 ? "" : "s"}`}
+            subtext={`${clerkMrrSubscriberCount} subscriber${clerkMrrSubscriberCount === 1 ? "" : "s"} · ${clerkMrrSource}`}
           />
           <MetricCard label="Active Subs" value={stripe.activeSubs} color="green" subtext="Stripe" />
           <MetricCard label="Revenue (30d)" value={fmt$(stripe.rev30d)} subtext={`${stripe.charges30d} charges`} color="green" />
