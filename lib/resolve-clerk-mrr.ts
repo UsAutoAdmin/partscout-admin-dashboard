@@ -22,9 +22,11 @@ function isTrue(v: string | undefined): boolean {
 
 function keyMode(secret: string | undefined): "live" | "test" | "unknown" | "none" {
   if (!secret) return "none";
-  if (secret.startsWith("sk_live_")) return "live";
-  if (secret.startsWith("sk_test_")) return "test";
-  return "unknown";
+  const s = secret.trim();
+  if (s.startsWith("sk_live_")) return "live";
+  if (s.startsWith("sk_test_")) return "test";
+  if (s.length > 10) return "unknown";
+  return "none";
 }
 
 /** When Stripe `subscriptions.list` doesn’t match the MRR you expect (wrong/missing line items). */
@@ -59,13 +61,16 @@ export async function resolveClerkMrrForDashboard(
     process.env.CLERK_BILLING_API_MRR === "0";
   const allowEstimateFallback = isTrue(process.env.CLERK_MRR_ALLOW_ESTIMATE);
   const allowTestKey = isTrue(process.env.CLERK_MRR_ALLOW_TEST_KEY);
-  const secret =
-    process.env.CLERK_LIVE_SECRET_KEY?.trim() ||
-    process.env.CLERK_SECRET_KEY?.trim();
+  const liveKey = process.env.CLERK_LIVE_SECRET_KEY?.trim();
+  const generalKey = process.env.CLERK_SECRET_KEY?.trim();
+  const secret = liveKey || generalKey;
 
   const mode = keyMode(secret);
+  console.log(
+    `[resolve-clerk-mrr] key source=${liveKey ? "CLERK_LIVE_SECRET_KEY" : "CLERK_SECRET_KEY"}, mode=${mode}, prefix=${secret?.slice(0, 8) ?? "(none)"}…`
+  );
 
-  if (!apiDisabled && secret && (mode !== "test" || allowTestKey)) {
+  if (!apiDisabled && secret && (mode === "live" || mode === "unknown" || allowTestKey)) {
     const api = await aggregateMrrFromClerkBillingApi(secret);
     if (api.ok && (api.mrr > 0 || api.subscribers > 0)) {
       return {

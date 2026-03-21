@@ -89,8 +89,10 @@ export async function aggregateMrrFromClerkBillingApi(
           error: `Clerk users list ${listRes.status}: ${text.slice(0, 200)}`,
         };
       }
-      const listJson = (await listRes.json()) as { data?: { id: string }[] };
-      const batch = listJson.data ?? [];
+      const listJson = await listRes.json();
+      const batch: { id: string }[] = Array.isArray(listJson)
+        ? listJson
+        : (listJson as { data?: { id: string }[] }).data ?? [];
       if (batch.length === 0) break;
 
       for (const u of batch) {
