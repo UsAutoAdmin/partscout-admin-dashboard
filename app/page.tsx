@@ -165,7 +165,7 @@ export default async function Dashboard() {
         {/* ── Revenue ── */}
         <Section
           title="💰 Revenue"
-          sub="MRR (total) = Stripe API + Clerk Billing (plan prices × active subscribers in Supabase). Legacy Stripe users are not double-counted."
+          sub="MRR (total) = Stripe API + Clerk Billing (plan × price from Supabase). Clerk subs often don’t appear in your Stripe API; we don’t skip users just because stripe_subscription_status is active. Set CLERK_MRR_EXCLUDE_STRIPE_ACTIVE=true if you need the old dedupe."
         />
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 mb-6">
           <MetricCard

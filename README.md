@@ -7,6 +7,9 @@ Optional in `.env.local`:
 ```bash
 # JSON: Clerk plan slug -> monthly USD (merges over defaults, e.g. founding_member → 199)
 CLERK_PLAN_MRR_USD={"founding_member":199}
+
+# Rare: skip users with stripe_subscription_status=active when summing Clerk MRR (old dedupe; can zero out Clerk if Stripe webhooks touched Clerk payers)
+# CLERK_MRR_EXCLUDE_STRIPE_ACTIVE=true
 ```
 
 Also set `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and `STRIPE_SECRET_KEY` as needed.
