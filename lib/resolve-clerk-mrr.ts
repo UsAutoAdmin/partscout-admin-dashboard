@@ -16,7 +16,7 @@ function parseOptionalUsd(envVal: string | undefined): number | null {
   return Math.round(n * 100) / 100;
 }
 
-/** When Stripe `subscriptions.list` doesn’t match your legacy/native MRR (e.g. $99 vs $199). */
+/** When Stripe `subscriptions.list` doesn’t match the MRR you expect (wrong/missing line items). */
 export function applyStripeMrrOverride(apiMrr: number): { mrr: number; label: string } {
   const o = parseOptionalUsd(process.env.STRIPE_MRR_OVERRIDE_USD);
   if (o != null) return { mrr: o, label: "STRIPE_MRR_OVERRIDE_USD" };

@@ -11,7 +11,7 @@ Business metrics from **Supabase**, **Stripe**, and **Clerk Billing**.
   2. **Clerk Billing API** — if **`CLERK_SECRET_KEY`** is set and **`CLERK_BILLING_API_MRR`** is not `false`, we call `GET /v1/users` + per-user `GET /v1/users/{id}/billing/subscription` to sum active plan fees (should align with Clerk’s ~$597).
   3. **Supabase fallback** — count active paid Clerk plans × **`CLERK_PLAN_MRR_USD`** / defaults.
 
-- **Stripe MRR** — from Stripe `subscriptions.list`, unless **`STRIPE_MRR_OVERRIDE_USD`** is set (e.g. legacy **$99** while the API shows a different amount). Example: **$597 + $99 = $696** total.
+- **Stripe MRR** — from Stripe `subscriptions.list`, unless **`STRIPE_MRR_OVERRIDE_USD`** is set (only if the API total doesn’t match what you know you bill—e.g. wrong price or missing sub). Example: **$597** (Clerk) **+ $199** (Stripe) **≈ $796** total.
 
 ### `.env.local` (common)
 
@@ -30,8 +30,8 @@ CLERK_SECRET_KEY=
 # Optional: lock Clerk MRR to the number shown in Clerk’s UI
 # CLERK_DASHBOARD_MRR_USD=597
 
-# Optional: legacy/native Stripe MRR if API total is wrong
-# STRIPE_MRR_OVERRIDE_USD=99
+# Optional: force Stripe MRR if subscriptions.list doesn’t match reality
+# STRIPE_MRR_OVERRIDE_USD=199
 
 # Optional: JSON map of plan slug -> monthly USD (Supabase path only)
 # CLERK_PLAN_MRR_USD={"founding_member":199}
