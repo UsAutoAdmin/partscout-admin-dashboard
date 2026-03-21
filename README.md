@@ -20,7 +20,8 @@ NEXT_PUBLIC_SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 STRIPE_SECRET_KEY=
 
-# Clerk (from Clerk Dashboard → API Keys) — enables Billing API MRR by default
+# Clerk (from Clerk Dashboard → API Keys) — enables Billing API MRR by default.
+# Use the same instance as your paying users: sk_live_… for production subs; sk_test_… only sees test users (often $0 MRR).
 CLERK_SECRET_KEY=
 
 # Optional: disable Clerk API aggregation (use Supabase estimate only)

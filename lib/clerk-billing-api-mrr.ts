@@ -9,9 +9,16 @@ const CLERK_API_V1 = "https://api.clerk.com/v1";
 
 type Money = { amount?: number } | null | undefined;
 
-function usdFromCents(m: Money): number {
-  if (!m || typeof m.amount !== "number") return 0;
-  return m.amount / 100;
+/**
+ * Clerk/Stripe-style money: often `amount` is in cents (19900), but some payloads use whole USD (199).
+ */
+function moneyToUsd(m: Money): number {
+  if (!m || typeof m.amount !== "number" || !Number.isFinite(m.amount)) return 0;
+  const a = m.amount;
+  const asCents = a / 100;
+  // Whole-dollar payloads (e.g. 199) would wrongly become $1.99 if we only divide by 100.
+  if (asCents > 0 && asCents < 5 && a >= 10) return a;
+  return asCents;
 }
 
 function get(obj: Record<string, unknown>, ...keys: string[]): unknown {
@@ -37,12 +44,12 @@ function monthlyUsdForItem(item: Record<string, unknown>): number {
   const annualMonthly = get(plan, "annual_monthly_fee", "annualMonthlyFee") as Money;
 
   if (isAnnual) {
-    const am = usdFromCents(annualMonthly);
+    const am = moneyToUsd(annualMonthly);
     if (am > 0) return am;
-    const af = usdFromCents(annualFee);
+    const af = moneyToUsd(annualFee);
     if (af > 0) return af / 12;
   }
-  return usdFromCents(fee);
+  return moneyToUsd(fee);
 }
 
 function subscriptionItems(sub: Record<string, unknown>): Record<string, unknown>[] {
@@ -102,15 +109,29 @@ export async function aggregateMrrFromClerkBillingApi(
 
         const sub = (await subRes.json()) as Record<string, unknown>;
         const subStatus = String(get(sub, "status") ?? "").toLowerCase();
-        if (subStatus !== "active") continue;
+        if (
+          subStatus === "abandoned" ||
+          subStatus === "canceled" ||
+          subStatus === "ended"
+        ) {
+          continue;
+        }
 
         let userMonthly = 0;
-        for (const item of subscriptionItems(sub)) {
+        const items = subscriptionItems(sub);
+        for (const item of items) {
           const st = String(get(item, "status") ?? "").toLowerCase();
-          if (st !== "active") continue;
+          if (st && st !== "active") continue;
           const trial = get(item, "is_free_trial", "isFreeTrial");
           if (trial === true) continue;
           userMonthly += monthlyUsdForItem(item);
+        }
+
+        // Some responses expose next_payment on subscription or item only
+        if (userMonthly <= 0) {
+          const np = get(sub, "next_payment", "nextPayment") as Record<string, unknown> | undefined;
+          const npAmt = np && (get(np, "amount") as Money | undefined);
+          userMonthly += moneyToUsd(npAmt as Money);
         }
 
         if (userMonthly > 0) {

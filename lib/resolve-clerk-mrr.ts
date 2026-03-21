@@ -49,7 +49,7 @@ export async function resolveClerkMrrForDashboard(
   const secret = process.env.CLERK_SECRET_KEY?.trim();
   if (!apiDisabled && secret) {
     const api = await aggregateMrrFromClerkBillingApi(secret);
-    if (api.ok) {
+    if (api.ok && (api.mrr > 0 || api.subscribers > 0)) {
       return {
         clerkMrr: api.mrr,
         clerkMrrSubscriberCount: api.subscribers,
@@ -57,7 +57,13 @@ export async function resolveClerkMrrForDashboard(
         sourceLabel: "Clerk Billing API",
       };
     }
-    console.warn("[resolve-clerk-mrr] Clerk API:", api.error);
+    if (api.ok && api.mrr === 0 && api.subscribers === 0) {
+      console.warn(
+        "[resolve-clerk-mrr] Clerk Billing API returned $0 — common causes: CLERK_SECRET_KEY is sk_test_ but subs are on production (use sk_live_…), or API shape mismatch. Using Supabase estimate."
+      );
+    } else if (!api.ok) {
+      console.warn("[resolve-clerk-mrr] Clerk API:", api.error);
+    }
   }
 
   const supabaseEstimate = computeClerkMrr(users);
