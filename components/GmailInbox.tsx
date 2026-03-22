@@ -54,56 +54,70 @@ export function GmailInbox({ initialEmails }: { initialEmails: Email[] }) {
   }
 
   if (initialEmails.length === 0) {
-    return <div className="rounded-xl border border-border bg-white p-6 text-sm text-ink-subtle">No emails found in inbox.</div>;
+    return (
+      <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/[0.03] p-6 text-sm text-gray-500">
+        No emails found in inbox.
+      </div>
+    );
   }
 
   return (
-    <div className="rounded-xl border border-border bg-white shadow-brand-sm overflow-hidden">
-      <div className="px-5 py-4 border-b border-border flex items-center justify-between">
-        <h3 className="font-semibold text-ink text-sm">Business Inbox — {initialEmails.filter(e => e.isUnread).length} unread</h3>
-        <span className="text-xs text-ink-subtle">{initialEmails.length} messages</span>
+    <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/[0.03] overflow-hidden">
+      <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
+        <h4 className="font-semibold text-gray-900 dark:text-white/90 text-sm">
+          Business Inbox — {initialEmails.filter(e => e.isUnread).length} unread
+        </h4>
+        <span className="text-xs text-gray-500">{initialEmails.length} messages</span>
       </div>
-      <div className="divide-y divide-border max-h-[520px] overflow-y-auto">
+      <div className="divide-y divide-gray-200 dark:divide-gray-800 max-h-[520px] overflow-y-auto custom-scrollbar">
         {initialEmails.map((email) => (
           <div key={email.id}>
             <button
               onClick={() => { setSelected(selected?.id === email.id ? null : email); setDraftBody(""); setStatus("idle"); }}
-              className={`w-full text-left px-5 py-3.5 hover:bg-cream transition-colors ${selected?.id === email.id ? "bg-brand-muted" : ""}`}
+              className={`w-full text-left px-5 py-3.5 transition-colors ${
+                selected?.id === email.id
+                  ? "bg-brand-50 dark:bg-brand-500/[0.08]"
+                  : "hover:bg-gray-50 dark:hover:bg-white/[0.02]"
+              }`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  {email.isUnread && <span className="shrink-0 w-2 h-2 rounded-full bg-blue-500 mt-1" />}
+                  {email.isUnread && <span className="shrink-0 w-2 h-2 rounded-full bg-brand-400 mt-1" />}
                   <div className="min-w-0">
-                    <p className={`text-sm truncate ${email.isUnread ? "font-bold text-ink" : "font-medium text-ink-muted"}`}>{email.from}</p>
-                    <p className={`text-xs truncate mt-0.5 ${email.isUnread ? "font-semibold text-ink" : "text-ink-muted"}`}>{email.subject}</p>
-                    <p className="text-xs text-ink-subtle truncate mt-0.5">{email.snippet}</p>
+                    <p className={`text-sm truncate ${email.isUnread ? "font-bold text-gray-900 dark:text-white/90" : "font-medium text-gray-700 dark:text-gray-300"}`}>
+                      {email.from}
+                    </p>
+                    <p className={`text-xs truncate mt-0.5 ${email.isUnread ? "font-semibold text-gray-900 dark:text-white/90" : "text-gray-500 dark:text-gray-400"}`}>
+                      {email.subject}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate mt-0.5">{email.snippet}</p>
                   </div>
                 </div>
-                <span className="shrink-0 text-xs text-ink-subtle">{timeAgo(email.date)}</span>
+                <span className="shrink-0 text-xs text-gray-500">{timeAgo(email.date)}</span>
               </div>
             </button>
 
             {selected?.id === email.id && (
-              <div className="px-5 pb-4 bg-brand-muted border-b border-brand-muted">
-                <p className="text-xs font-semibold text-ink-subtle mb-2">Draft reply → {email.fromEmail}</p>
+              <div className="px-5 pb-4 bg-brand-50 dark:bg-brand-500/[0.05] border-b border-gray-200 dark:border-gray-800">
+                <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">Draft reply → {email.fromEmail}</p>
                 <textarea
                   value={draftBody}
                   onChange={(e) => setDraftBody(e.target.value)}
-                  placeholder="Write your reply…"
+                  placeholder="Write your reply..."
                   rows={4}
-                  className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:outline-none focus:ring-2 focus:ring-brand resize-none"
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white/90 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500/50 resize-none"
                 />
                 <div className="flex items-center justify-between mt-2">
-                  <p className="text-xs text-ink-subtle">Saves to Gmail Drafts — you send from Gmail</p>
+                  <p className="text-xs text-gray-500">Saves to Gmail Drafts — you send from Gmail</p>
                   <button
                     onClick={saveDraft}
                     disabled={!draftBody.trim() || status === "saving"}
-                    className="rounded-lg bg-brand px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-hover disabled:opacity-40 transition-colors"
+                    className="rounded-lg bg-brand-500 px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-40 transition-colors"
                   >
-                    {status === "saving" ? "Saving…" : status === "saved" ? "✓ Saved" : "Save Draft"}
+                    {status === "saving" ? "Saving..." : status === "saved" ? "Saved" : "Save Draft"}
                   </button>
                 </div>
-                {status === "error" && <p className="text-xs text-red-500 mt-1">{errMsg}</p>}
+                {status === "error" && <p className="text-xs text-error-500 dark:text-error-400 mt-1">{errMsg}</p>}
               </div>
             )}
           </div>

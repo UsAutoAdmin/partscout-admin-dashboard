@@ -4,3 +4,7 @@ node_modules/
 .env
 *.log
 *.tsbuildinfo
+media/uploads/
+media/output/
+media/broll/
+media/assets/
