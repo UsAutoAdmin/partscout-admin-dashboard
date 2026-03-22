@@ -65,6 +65,69 @@ export type ClerkBillingApiMrrResult =
 /**
  * Sum active Clerk Billing subscription amounts across all users (matches Clerk dashboard MRR when API fields align).
  */
+async function fetchUserSubscription(
+  uid: string,
+  secretKey: string
+): Promise<{ monthly: number } | null> {
+  try {
+    const subRes = await fetch(
+      `${CLERK_API_V1}/users/${encodeURIComponent(uid)}/billing/subscription`,
+      {
+        headers: { Authorization: `Bearer ${secretKey}` },
+        next: { revalidate: 30 },
+      }
+    );
+    if (subRes.status === 404 || !subRes.ok) return null;
+
+    const sub = (await subRes.json()) as Record<string, unknown>;
+    const subStatus = String(get(sub, "status") ?? "").toLowerCase();
+    if (subStatus === "abandoned" || subStatus === "canceled" || subStatus === "ended") {
+      return null;
+    }
+
+    let userMonthly = 0;
+    const items = subscriptionItems(sub);
+    for (const item of items) {
+      const st = String(get(item, "status") ?? "").toLowerCase();
+      if (st && st !== "active") continue;
+      const trial = get(item, "is_free_trial", "isFreeTrial");
+      if (trial === true) continue;
+      userMonthly += monthlyUsdForItem(item);
+    }
+
+    if (userMonthly <= 0) {
+      const np = get(sub, "next_payment", "nextPayment") as Record<string, unknown> | undefined;
+      const npAmt = np && (get(np, "amount") as Money | undefined);
+      userMonthly += moneyToUsd(npAmt as Money);
+    }
+
+    return userMonthly > 0 ? { monthly: userMonthly } : null;
+  } catch {
+    return null;
+  }
+}
+
+const CONCURRENCY = 10;
+
+async function parallelMap<T, R>(
+  items: T[],
+  fn: (item: T) => Promise<R>,
+  concurrency: number
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let idx = 0;
+
+  async function worker() {
+    while (idx < items.length) {
+      const i = idx++;
+      results[i] = await fn(items[i]);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => worker()));
+  return results;
+}
+
 export async function aggregateMrrFromClerkBillingApi(
   secretKey: string
 ): Promise<ClerkBillingApiMrrResult> {
@@ -74,12 +137,14 @@ export async function aggregateMrrFromClerkBillingApi(
   const limit = 100;
 
   try {
+    const allUserIds: string[] = [];
+
     while (true) {
       const listRes = await fetch(
         `${CLERK_API_V1}/users?limit=${limit}&offset=${offset}`,
         {
           headers: { Authorization: `Bearer ${secretKey}` },
-          cache: "no-store",
+          next: { revalidate: 30 },
         }
       );
       if (!listRes.ok) {
@@ -96,54 +161,24 @@ export async function aggregateMrrFromClerkBillingApi(
       if (batch.length === 0) break;
 
       for (const u of batch) {
-        const uid = u.id;
-        if (!uid) continue;
-
-        const subRes = await fetch(
-          `${CLERK_API_V1}/users/${encodeURIComponent(uid)}/billing/subscription`,
-          {
-            headers: { Authorization: `Bearer ${secretKey}` },
-            cache: "no-store",
-          }
-        );
-        if (subRes.status === 404) continue;
-        if (!subRes.ok) continue;
-
-        const sub = (await subRes.json()) as Record<string, unknown>;
-        const subStatus = String(get(sub, "status") ?? "").toLowerCase();
-        if (
-          subStatus === "abandoned" ||
-          subStatus === "canceled" ||
-          subStatus === "ended"
-        ) {
-          continue;
-        }
-
-        let userMonthly = 0;
-        const items = subscriptionItems(sub);
-        for (const item of items) {
-          const st = String(get(item, "status") ?? "").toLowerCase();
-          if (st && st !== "active") continue;
-          const trial = get(item, "is_free_trial", "isFreeTrial");
-          if (trial === true) continue;
-          userMonthly += monthlyUsdForItem(item);
-        }
-
-        // Some responses expose next_payment on subscription or item only
-        if (userMonthly <= 0) {
-          const np = get(sub, "next_payment", "nextPayment") as Record<string, unknown> | undefined;
-          const npAmt = np && (get(np, "amount") as Money | undefined);
-          userMonthly += moneyToUsd(npAmt as Money);
-        }
-
-        if (userMonthly > 0) {
-          totalMrr += userMonthly;
-          subscribers += 1;
-        }
+        if (u.id) allUserIds.push(u.id);
       }
 
       offset += batch.length;
       if (batch.length < limit) break;
+    }
+
+    const results = await parallelMap(
+      allUserIds,
+      (uid) => fetchUserSubscription(uid, secretKey),
+      CONCURRENCY
+    );
+
+    for (const r of results) {
+      if (r && r.monthly > 0) {
+        totalMrr += r.monthly;
+        subscribers += 1;
+      }
     }
 
     return {
