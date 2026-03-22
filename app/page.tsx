@@ -4,7 +4,6 @@ import { MetricCard } from "@/components/MetricCard";
 import {
   fetchUsers, fetchRevenue, fetchPickSheetsAndParts, fetchAutomationRuns,
   fetchScrapes, fetchInfra, computeUserMetrics, computeAutomationMetrics,
-  isPaidUser,
 } from "@/lib/data";
 import { fmt$ } from "@/lib/format";
 

@@ -476,8 +476,6 @@ export default function SchedulerPage() {
   }
 
   const weekEnd = addDays(weekStart, 6);
-  const isThisWeek =
-    startOfWeek(new Date()).getTime() === weekStart.getTime();
 
   return (
     <DashboardLayout title="Scheduler">

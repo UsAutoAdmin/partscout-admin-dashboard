@@ -104,7 +104,7 @@ export async function processHook(
   // Input 2: Riser SFX (optional)
   if (useRiser) inputs.push("-i", RISER_PATH);
 
-  let lutFilter = useLut ? `,lut3d='${LUT_PATH}'` : "";
+  const lutFilter = useLut ? `,lut3d='${LUT_PATH}'` : "";
 
   const brollFilter = `[0:v]scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}${lutFilter},setpts=PTS-STARTPTS[broll]`;
   const headFilter = `[1:v]scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}${lutFilter}[head]`;
