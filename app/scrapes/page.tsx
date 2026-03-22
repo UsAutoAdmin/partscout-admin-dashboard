@@ -2,7 +2,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import ScrapesSection from "@/components/dashboard/ScrapesSection";
 import { fetchScrapes, fetchInfra } from "@/lib/data";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
 
 export default async function ScrapesPage() {
   const [scrapes, infra] = await Promise.all([fetchScrapes(), fetchInfra()]);

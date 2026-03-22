@@ -2,7 +2,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import AutomationSection from "@/components/dashboard/AutomationSection";
 import { fetchAutomationRuns, computeAutomationMetrics } from "@/lib/data";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
 
 export default async function AutomationPage() {
   const autoRuns = await fetchAutomationRuns();

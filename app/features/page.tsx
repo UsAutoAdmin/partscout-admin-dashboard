@@ -2,7 +2,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import FeatureUsageSection from "@/components/dashboard/FeatureUsageSection";
 import { fetchUsers, fetchPickSheetsAndParts, computeFeatureMetrics } from "@/lib/data";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
 
 export default async function FeaturesPage() {
   const [users, { pickSheets, dbParts }] = await Promise.all([

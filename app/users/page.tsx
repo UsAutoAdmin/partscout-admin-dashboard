@@ -2,7 +2,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import UsersSection from "@/components/dashboard/UsersSection";
 import { fetchUsers, fetchRevenue, computeUserMetrics, isPaidUser } from "@/lib/data";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
 
 export default async function UsersPage() {
   const users = await fetchUsers();

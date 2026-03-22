@@ -2,7 +2,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import InfraSection from "@/components/dashboard/InfraSection";
 import { fetchInfra } from "@/lib/data";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
 
 export default async function InfrastructurePage() {
   const infra = await fetchInfra();

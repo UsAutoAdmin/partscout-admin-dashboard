@@ -3,7 +3,7 @@ import { GmailInbox } from "@/components/GmailInbox";
 import SectionHeader from "@/components/SectionHeader";
 import { fetchEmails } from "@/lib/data";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
 
 export default async function InboxPage() {
   const emails = await fetchEmails(30);

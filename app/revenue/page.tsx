@@ -2,7 +2,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import RevenueSection from "@/components/dashboard/RevenueSection";
 import { fetchUsers, fetchRevenue } from "@/lib/data";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
 
 export default async function RevenuePage() {
   const users = await fetchUsers();

@@ -7,7 +7,7 @@ import {
 } from "@/lib/data";
 import { fmt$ } from "@/lib/format";
 
-export const revalidate = 30;
+export const dynamic = "force-dynamic";
 
 function SectionLink({ href, title, children }: { href: string; title: string; children: React.ReactNode }) {
   return (
