@@ -71,7 +71,7 @@ async function publishPost(
   }
 }
 
-export async function POST(req: NextRequest) {
+async function handleCron(req: NextRequest) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
     const auth = req.headers.get("authorization");
@@ -120,4 +120,12 @@ export async function POST(req: NextRequest) {
     failed: results.filter((r) => r.status === "failed").length,
     results,
   });
+}
+
+export async function GET(req: NextRequest) {
+  return handleCron(req);
+}
+
+export async function POST(req: NextRequest) {
+  return handleCron(req);
 }
