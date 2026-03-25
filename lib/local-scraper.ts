@@ -1,13 +1,4 @@
-import { promises as fs } from "fs";
-import path from "path";
-import { execFile, execSync } from "child_process";
-import { promisify } from "util";
-
-const execFileAsync = promisify(execFile);
-const scraperRoot = "/Users/chaseeriksson/Downloads/Seed Database";
-const pidPath = path.join(scraperRoot, "scraper.pid");
-const logPath = path.join(scraperRoot, "logs", "scraper.log");
-const dashboardUrl = "http://localhost:3847";
+const agentBaseUrl = process.env.LOCAL_SCRAPER_AGENT_URL || "http://127.0.0.1:3848";
 
 export type LocalScraperStatus = {
   root: string;
@@ -15,92 +6,37 @@ export type LocalScraperStatus = {
   running: boolean;
   logTail: string[];
   dashboardUrl: string;
+  agentUrl?: string;
 };
 
-async function readPidFile(): Promise<number | null> {
-  try {
-    const raw = await fs.readFile(pidPath, "utf8");
-    const pid = Number(raw.trim());
-    return Number.isFinite(pid) ? pid : null;
-  } catch {
-    return null;
+async function request(path: string, init?: RequestInit) {
+  const res = await fetch(`${agentBaseUrl}${path}`, {
+    ...init,
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      ...(init?.headers || {}),
+    },
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data?.error || `Local scraper agent request failed (${res.status})`);
   }
-}
-
-function findLiveScraperPid(): number | null {
-  try {
-    const output = execSync(`ps aux | grep -F '${scraperRoot}' | grep 'src/index.ts' | grep -v grep`, {
-      encoding: "utf8",
-      shell: "/bin/zsh",
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-
-    if (!output) return null;
-    const firstLine = output.split(/\r?\n/)[0];
-    const parts = firstLine.trim().split(/\s+/);
-    const pid = Number(parts[1]);
-    return Number.isFinite(pid) ? pid : null;
-  } catch {
-    return null;
-  }
-}
-
-async function isRunning(pid: number | null): Promise<boolean> {
-  if (!pid) return false;
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-async function resolvePid(): Promise<number | null> {
-  const filePid = await readPidFile();
-  if (await isRunning(filePid)) return filePid;
-  return findLiveScraperPid();
-}
-
-async function readLogTail(lines = 40): Promise<string[]> {
-  try {
-    const raw = await fs.readFile(logPath, "utf8");
-    return raw.trim().split(/\r?\n/).slice(-lines);
-  } catch {
-    return [];
-  }
+  return data;
 }
 
 export async function getLocalScraperStatus(): Promise<LocalScraperStatus> {
-  const pid = await resolvePid();
-  return {
-    root: scraperRoot,
-    pid,
-    running: await isRunning(pid),
-    logTail: await readLogTail(),
-    dashboardUrl,
-  };
+  return request("/status");
 }
 
 export async function startLocalScraper(): Promise<LocalScraperStatus> {
-  const current = await getLocalScraperStatus();
-  if (current.running) return current;
-  await execFileAsync("bash", ["run-detached.sh"], { cwd: scraperRoot });
-  return getLocalScraperStatus();
+  return request("/control", { method: "POST", body: JSON.stringify({ action: "start" }) });
 }
 
 export async function stopLocalScraper(): Promise<LocalScraperStatus> {
-  const pid = await resolvePid();
-  if (pid) {
-    try {
-      process.kill(pid, "SIGTERM");
-    } catch {}
-  }
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  return getLocalScraperStatus();
+  return request("/control", { method: "POST", body: JSON.stringify({ action: "stop" }) });
 }
 
 export async function restartLocalScraper(): Promise<LocalScraperStatus> {
-  await stopLocalScraper();
-  await new Promise((resolve) => setTimeout(resolve, 1500));
-  return startLocalScraper();
+  return request("/control", { method: "POST", body: JSON.stringify({ action: "restart" }) });
 }

@@ -8,6 +8,7 @@ type LocalScraperStatus = {
   running: boolean;
   logTail: string[];
   dashboardUrl: string;
+  agentUrl?: string;
 };
 
 const empty: LocalScraperStatus = {
@@ -63,7 +64,10 @@ export default function LocalScraperControl() {
           <h3 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white/90">This Mac mini</h3>
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Control and inspect the running Seed Database scraper on this machine.</p>
         </div>
-        <a href={status.dashboardUrl} target="_blank" rel="noreferrer" className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-brand-400 hover:text-brand-600 dark:border-gray-800 dark:text-gray-300 dark:hover:text-brand-300">Open local scraper dashboard</a>
+        <div className="flex flex-wrap gap-2">
+          <a href={status.dashboardUrl} target="_blank" rel="noreferrer" className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-brand-400 hover:text-brand-600 dark:border-gray-800 dark:text-gray-300 dark:hover:text-brand-300">Open local scraper dashboard</a>
+          {status.agentUrl ? <span className="rounded-xl bg-gray-100 px-3 py-2 text-xs text-gray-600 dark:bg-white/5 dark:text-gray-300">Agent: {status.agentUrl}</span> : null}
+        </div>
       </div>
 
       <div className="mt-5 grid gap-4 md:grid-cols-4">
@@ -75,7 +79,7 @@ export default function LocalScraperControl() {
 
       {likelyRemoteDashboard ? (
         <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
-          You are viewing the dashboard from a remote-hosted runtime. The <strong>Open local scraper dashboard</strong> link can still work from your browser if localhost is forwarded on your machine, but scraper status/actions in this panel only work when the app runtime itself is on the same Mac mini as the scraper process.
+          This dashboard is remote-hosted, so local scraper status/control depends on the new machine-local agent being reachable by the app runtime. If status still fails after the scraper restarts, the agent may not be running yet on this Mac mini.
         </div>
       ) : null}
 
@@ -90,7 +94,7 @@ export default function LocalScraperControl() {
 
       <div className="mt-5 rounded-2xl bg-gray-50 p-4 dark:bg-black/20">
         <div className="mb-2 text-sm font-medium text-gray-900 dark:text-white/90">Recent local log tail</div>
-        <pre className="max-h-[320px] overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-600 dark:text-gray-300">{status.logTail.length ? status.logTail.join("\n") : "No log output yet."}</pre>
+        <pre className="max-h-[320px] overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-600 dark:text-gray-300">{status.logTail.length ? status.logTail.join("\n") : "No log output yet. If this is blank and the scraper is running, restart the scraper once so the local agent boots with it."}</pre>
       </div>
     </section>
   );
