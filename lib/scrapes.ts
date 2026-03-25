@@ -29,52 +29,53 @@ export type ScrapePipelineMetrics = {
   }>;
 };
 
-type Table8Row = { id: string };
-type Table9Row = {
-  original_url: string;
-  active: string | null;
-  sold_link: string | null;
-  sold_scraped: string | null;
-  sold: string | null;
-  sell_through: number | null;
-  sold_confidence: number | null;
-  active_lastscraped: string | null;
-  sold_lastscraped: string | null;
-  sold_verified_at: string | null;
-};
+async function exactCount(table: string, builder?: (q: any) => Promise<any> | any): Promise<number> {
+  const base = supabase().from(table).select("id", { count: "exact", head: true });
+  const res = builder ? await builder(base) : await base;
+  if (res.error) throw new Error(`${table} exact count failed: ${res.error.message || res.statusText || 'unknown error'}`);
+  return res.count ?? 0;
+}
 
-function toNum(value: string | null | undefined): number | null {
-  if (value == null || value === "") return null;
-  const n = Number(String(value).replace(/,/g, ""));
-  return Number.isFinite(n) ? n : null;
+async function estimatedCount(table: string): Promise<number> {
+  const res = await supabase().from(table).select("id", { count: "estimated", head: true });
+  if (res.error) throw new Error(`${table} estimated count failed: ${res.error.message || res.statusText || 'unknown error'}`);
+  return res.count ?? 0;
 }
 
 export async function fetchScrapePipelineMetrics(): Promise<ScrapePipelineMetrics> {
-  const [table8Res, table9Res, topRowsRes] = await Promise.all([
-    supabase().from("8_Research_Assistant").select("id"),
-    supabase().from("9_Octoparse_Scrapes").select("original_url, active, sold_link, sold_scraped, sold, sell_through, sold_confidence, active_lastscraped, sold_lastscraped, sold_verified_at"),
-    supabase().from("9_Octoparse_Scrapes").select("original_url, active, sold, sell_through, sold_confidence, active_lastscraped, sold_lastscraped, sold_verified_at").order("sell_through", { ascending: false, nullsFirst: false }).limit(15),
+  const [
+    table8Total,
+    table9Total,
+    activeCompleted,
+    activeZeroCount,
+    soldEligible,
+    soldCompleted,
+    soldZeroCount,
+    verificationEligible,
+    verificationCompleted,
+    confidenceHigh,
+    topRowsRes,
+  ] = await Promise.all([
+    estimatedCount("8_Research_Assistant"),
+    exactCount("9_Octoparse_Scrapes"),
+    exactCount("9_Octoparse_Scrapes", (q) => q.not("active", "is", null)),
+    exactCount("9_Octoparse_Scrapes", (q) => q.eq("active", "0")),
+    exactCount("9_Octoparse_Scrapes", (q) => q.not("sold_link", "is", null)),
+    exactCount("9_Octoparse_Scrapes", (q) => q.eq("sold_scraped", "true")),
+    exactCount("9_Octoparse_Scrapes", (q) => q.eq("sold", "0")),
+    exactCount("9_Octoparse_Scrapes", (q) => q.gt("sell_through", 60)),
+    exactCount("9_Octoparse_Scrapes", (q) => q.not("sold_verified_at", "is", null)),
+    exactCount("9_Octoparse_Scrapes", (q) => q.gt("sold_confidence", 0.8)),
+    supabase()
+      .from("9_Octoparse_Scrapes")
+      .select("original_url, active, sold, sell_through, sold_confidence, active_lastscraped, sold_lastscraped, sold_verified_at")
+      .order("sell_through", { ascending: false, nullsFirst: false })
+      .limit(15),
   ]);
 
-  if (table8Res.error) throw new Error(`Table 8 query failed: ${table8Res.error.message}`);
-  if (table9Res.error) throw new Error(`Table 9 query failed: ${table9Res.error.message}`);
-  if (topRowsRes.error) throw new Error(`Top pipeline rows query failed: ${topRowsRes.error.message}`);
-
-  const table8 = (table8Res.data ?? []) as Table8Row[];
-  const table9 = (table9Res.data ?? []) as Table9Row[];
-  const topPipelineRows = (topRowsRes.data ?? []) as ScrapePipelineMetrics["topPipelineRows"];
-
-  const activeCompleted = table9.filter((row) => row.active != null).length;
-  const activeZeroCount = table9.filter((row) => toNum(row.active) === 0).length;
-  const soldEligible = table9.filter((row) => !!row.sold_link).length;
-  const soldCompleted = table9.filter((row) => row.sold_scraped === "true").length;
-  const soldZeroCount = table9.filter((row) => toNum(row.sold) === 0).length;
-  const verificationEligible = table9.filter((row) => (row.sell_through ?? -Infinity) > 60).length;
-  const verificationCompleted = table9.filter((row) => row.sold_verified_at != null).length;
-  const confidenceHigh = table9.filter((row) => (row.sold_confidence ?? -Infinity) > 0.8).length;
-
-  const table8Total = table8.length;
-  const table9Total = table9.length;
+  if (topRowsRes.error) {
+    throw new Error(`Top pipeline rows query failed: ${topRowsRes.error.message}`);
+  }
 
   return {
     table8Total,
@@ -91,6 +92,6 @@ export async function fetchScrapePipelineMetrics(): Promise<ScrapePipelineMetric
     confidenceHighPct: verificationEligible ? Math.round((confidenceHigh / verificationEligible) * 1000) / 10 : 0,
     activeZeroCount,
     soldZeroCount,
-    topPipelineRows,
+    topPipelineRows: topRowsRes.data ?? [],
   };
 }
