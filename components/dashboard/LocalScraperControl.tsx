@@ -34,6 +34,8 @@ export default function LocalScraperControl() {
     load().catch((err) => setError(err instanceof Error ? err.message : "Failed to load scraper status")).finally(() => setLoading(false));
   }, []);
 
+  const likelyRemoteDashboard = typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1";
+
   async function act(action: "start" | "stop" | "restart") {
     setWorking(action);
     setError(null);
@@ -70,6 +72,12 @@ export default function LocalScraperControl() {
         <div className="rounded-xl bg-gray-50 p-4 dark:bg-black/20"><div className="text-xs text-gray-500 dark:text-gray-400">Root</div><div className="mt-1 text-sm font-medium text-gray-900 dark:text-white break-all">{status.root || "—"}</div></div>
         <div className="rounded-xl bg-gray-50 p-4 dark:bg-black/20"><div className="text-xs text-gray-500 dark:text-gray-400">Log lines loaded</div><div className="mt-1 text-xl font-semibold text-gray-900 dark:text-white">{status.logTail.length}</div></div>
       </div>
+
+      {likelyRemoteDashboard ? (
+        <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+          You are viewing the dashboard from a remote-hosted runtime. The <strong>Open local scraper dashboard</strong> link can still work from your browser if localhost is forwarded on your machine, but scraper status/actions in this panel only work when the app runtime itself is on the same Mac mini as the scraper process.
+        </div>
+      ) : null}
 
       <div className="mt-5 flex flex-wrap gap-3">
         <button onClick={() => act("start")} disabled={working !== null} className="rounded-xl bg-green-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-60">{working === "start" ? "Starting…" : "Start"}</button>
