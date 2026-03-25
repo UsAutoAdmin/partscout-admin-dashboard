@@ -33,6 +33,7 @@ interface ScrapesSectionProps {
   activeZeroCount: number;
   soldZeroCount: number;
   topPipelineRows: PipelineRow[];
+  warnings: string[];
 }
 
 export default function ScrapesSection(props: ScrapesSectionProps) {
@@ -52,11 +53,21 @@ export default function ScrapesSection(props: ScrapesSectionProps) {
     activeZeroCount,
     soldZeroCount,
     topPipelineRows,
+    warnings,
   } = props;
 
   return (
     <section className="space-y-6">
       <SectionHeader title="Scrape Pipeline" subtitle="Track table 8 → table 9 coverage, sold progression, verification quality, and local scraper control." />
+
+      {warnings.length ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+          <div className="text-xs font-semibold uppercase tracking-[0.18em]">Metric warnings</div>
+          <ul className="mt-2 list-disc pl-5 text-sm leading-6">
+            {warnings.map((warning, index) => <li key={index}>{warning}</li>)}
+          </ul>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <MetricCard label="Table 8 Total" value={fmtNum(table8Total)} />
