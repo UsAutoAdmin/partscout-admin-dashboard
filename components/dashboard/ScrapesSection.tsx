@@ -4,7 +4,7 @@ import { MetricCard } from "../MetricCard";
 import SectionHeader from "../SectionHeader";
 import { Table, TableHeader, TableBody, TableRow, TableCell } from "../Table";
 import { fmtNum } from "@/lib/format";
-import LocalScraperControl from "./LocalScraperControl";
+import ScraperFleetControl from "./ScraperFleetControl";
 
 interface PipelineRow {
   original_url: string;
@@ -125,7 +125,7 @@ export default function ScrapesSection(props: ScrapesSectionProps) {
         </div>
       </div>
 
-      <LocalScraperControl />
+      <ScraperFleetControl />
     </section>
   );
 }
