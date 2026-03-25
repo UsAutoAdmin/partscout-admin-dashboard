@@ -1,6 +1,7 @@
 import Link from "next/link";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { MetricCard } from "@/components/MetricCard";
+import CommandCenter from "@/components/dashboard/CommandCenter";
 import {
   fetchUsers, fetchRevenue, fetchPickSheetsAndParts, fetchAutomationRuns,
   fetchScrapes, fetchInfra, computeUserMetrics, computeAutomationMetrics,
@@ -45,6 +46,8 @@ export default async function Dashboard() {
   return (
     <DashboardLayout lastUpdated={lastUpdated} title="Dashboard">
       <div className="space-y-8">
+        <CommandCenter />
+
         {/* Revenue Overview */}
         <SectionLink href="/revenue" title="Revenue">
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
