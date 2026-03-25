@@ -1,4 +1,5 @@
 const agentBaseUrl = process.env.LOCAL_SCRAPER_AGENT_URL || "http://127.0.0.1:3848";
+const agentSharedSecret = process.env.LOCAL_SCRAPER_AGENT_SECRET;
 
 export type LocalScraperStatus = {
   root: string;
@@ -15,6 +16,7 @@ async function request(path: string, init?: RequestInit) {
     cache: "no-store",
     headers: {
       "Content-Type": "application/json",
+      ...(agentSharedSecret ? { "x-agent-secret": agentSharedSecret } : {}),
       ...(init?.headers || {}),
     },
   });
