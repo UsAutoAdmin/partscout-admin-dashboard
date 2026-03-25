@@ -9,7 +9,14 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const body = await request.json();
-  const result = await processCommand(body?.message ?? "");
-  return NextResponse.json(result);
+  try {
+    const body = await request.json();
+    const result = await processCommand(body?.message ?? "");
+    return NextResponse.json(result);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Command center failed" },
+      { status: 500 },
+    );
+  }
 }

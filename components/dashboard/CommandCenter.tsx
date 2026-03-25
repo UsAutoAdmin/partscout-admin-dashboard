@@ -24,33 +24,57 @@ type CommandState = {
 
 const emptyState: CommandState = { messages: [], tasks: [], lastUpdated: null };
 
+async function fetchWithTimeout(input: RequestInfo | URL, init?: RequestInit, timeoutMs = 8000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default function CommandCenter() {
   const [state, setState] = useState<CommandState>(emptyState);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch("/api/command-center")
+    fetchWithTimeout("/api/command-center")
       .then((res) => res.json())
       .then((data) => setState(data))
+      .catch(() => setError("Couldn’t load command history."))
       .finally(() => setLoading(false));
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = message.trim();
-    if (!trimmed) return;
+    if (!trimmed || submitting) return;
     setSubmitting(true);
-    const res = await fetch("/api/command-center", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: trimmed }),
-    });
-    const data = await res.json();
-    setState(data.state);
-    setMessage("");
-    setSubmitting(false);
+    setError(null);
+
+    try {
+      const res = await fetchWithTimeout("/api/command-center", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: trimmed }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || "Command center request failed.");
+      }
+
+      setState(data.state);
+      setMessage("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Command center request failed.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -105,6 +129,7 @@ export default function CommandCenter() {
               {submitting ? "Sending…" : "Send to Chud"}
             </button>
           </div>
+          {error ? <div className="text-sm text-red-600 dark:text-red-400">{error}</div> : null}
         </form>
       </section>
 

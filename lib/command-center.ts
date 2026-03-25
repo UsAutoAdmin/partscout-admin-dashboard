@@ -24,7 +24,7 @@ export type CommandState = {
 const dataDir = path.join(process.cwd(), "media");
 const statePath = path.join(dataDir, "command-center-state.json");
 
-const defaultState: CommandState = {
+const memoryState: CommandState = {
   messages: [],
   tasks: [],
   lastUpdated: null,
@@ -39,14 +39,20 @@ export async function getCommandState(): Promise<CommandState> {
     const raw = await fs.readFile(statePath, "utf8");
     return JSON.parse(raw) as CommandState;
   } catch {
-    return defaultState;
+    return memoryState;
   }
 }
 
 async function saveCommandState(state: CommandState): Promise<CommandState> {
-  await ensureDir();
   state.lastUpdated = new Date().toISOString();
-  await fs.writeFile(statePath, JSON.stringify(state, null, 2), "utf8");
+  try {
+    await ensureDir();
+    await fs.writeFile(statePath, JSON.stringify(state, null, 2), "utf8");
+  } catch {
+    memoryState.messages = state.messages;
+    memoryState.tasks = state.tasks;
+    memoryState.lastUpdated = state.lastUpdated;
+  }
   return state;
 }
 
