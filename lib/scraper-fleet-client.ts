@@ -8,6 +8,10 @@ export type FleetScraperStatus = {
   logTail: string[];
   dashboardUrl: string;
   agentUrl: string;
+  metrics?: {
+    sold: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number };
+    active: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number };
+  } | null;
   error?: string;
 };
 

@@ -32,6 +32,7 @@ async function getFleetStatus() {
         logTail: status.logTail ?? [],
         dashboardUrl: `http://${machine.ip}:3847`,
         agentUrl: baseUrl,
+        metrics: status.metrics ?? null,
       };
     } catch (error) {
       return {

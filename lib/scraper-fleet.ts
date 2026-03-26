@@ -10,6 +10,10 @@ export type FleetScraperStatus = {
   logTail: string[];
   dashboardUrl: string;
   agentUrl: string;
+  metrics?: {
+    sold: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number };
+    active: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number };
+  } | null;
   error?: string;
 };
 
@@ -50,6 +54,7 @@ export async function getScraperFleetStatus(): Promise<FleetScraperStatus[]> {
           logTail: status.logTail ?? [],
           dashboardUrl: `http://${machine.ip}:3847`,
           agentUrl: baseUrl,
+          metrics: status.metrics ?? null,
         };
       } catch (error) {
         return {
