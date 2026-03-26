@@ -81,7 +81,7 @@ const server = http.createServer(async (req, res) => {
       }
       const result = await agentRequest(`http://${machine.ip}:3848`, '/control', {
         method: 'POST',
-        body: JSON.stringify({ action: body.action }),
+        body: JSON.stringify({ action: body.action, mode: body.mode, value: body.value }),
       });
       res.writeHead(200);
       res.end(JSON.stringify(result));

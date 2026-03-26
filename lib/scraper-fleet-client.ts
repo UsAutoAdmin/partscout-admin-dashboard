@@ -35,9 +35,14 @@ export async function getScraperFleetStatusViaGateway(): Promise<FleetScraperSta
   return gatewayRequest('/fleet/status');
 }
 
-export async function controlScraperFleetMachineViaGateway(key: string, action: 'start' | 'stop' | 'restart') {
+export async function controlScraperFleetMachineViaGateway(
+  key: string,
+  action: 'start' | 'stop' | 'restart' | 'setWorkers' | 'setBrowsers' | 'startMode' | 'pauseMode' | 'resumeMode',
+  mode?: 'sold' | 'active',
+  value?: number,
+) {
   return gatewayRequest('/fleet/control', {
     method: 'POST',
-    body: JSON.stringify({ key, action }),
+    body: JSON.stringify({ key, action, mode, value }),
   });
 }
