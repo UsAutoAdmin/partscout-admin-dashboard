@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { controlScraperFleetMachine, getScraperFleetStatus } from "@/lib/scraper-fleet";
+import { controlScraperFleetMachineViaGateway, getScraperFleetStatusViaGateway } from "@/lib/scraper-fleet-client";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return NextResponse.json(await getScraperFleetStatus());
+  return NextResponse.json(await getScraperFleetStatusViaGateway());
 }
 
 export async function POST(request: Request) {
@@ -17,7 +17,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await controlScraperFleetMachine(key, action);
+    const result = await controlScraperFleetMachineViaGateway(key, action);
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Fleet control failed" }, { status: 500 });

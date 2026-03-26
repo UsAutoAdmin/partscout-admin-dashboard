@@ -13,7 +13,7 @@ export type FleetScraperStatus = {
   error?: string;
 };
 
-const SCRAPER_FLEET = [
+export const SCRAPER_FLEET = [
   { key: "mini1", label: "Mac mini 1", ip: "100.106.88.91" },
   { key: "mini2", label: "Mac mini 2", ip: "100.100.6.101" },
   { key: "mini3", label: "Mac mini 3", ip: "100.68.192.57" },
