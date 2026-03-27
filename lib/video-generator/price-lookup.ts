@@ -178,7 +178,7 @@ function expandWithSynonyms(spoken: string): string[] {
       names.push(...alts);
     }
   }
-  return [...new Set(names)];
+  return Array.from(new Set(names));
 }
 
 interface CatalogEntry {
