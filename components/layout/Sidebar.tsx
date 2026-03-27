@@ -81,6 +81,15 @@ const navItems = [
       </svg>
     ),
   },
+  {
+    name: "Video Research",
+    path: "/video-research",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M10 1.667A8.333 8.333 0 1018.333 10 8.342 8.342 0 0010 1.667zm0 12.916a.625.625 0 110-1.25.625.625 0 010 1.25zm.625-3.75h-1.25V5.833h1.25v5z" fill="currentColor"/>
+      </svg>
+    ),
+  },
 ];
 
 const contentMachineItems = [
