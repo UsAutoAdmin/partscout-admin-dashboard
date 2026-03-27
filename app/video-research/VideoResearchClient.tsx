@@ -70,8 +70,8 @@ export default function VideoResearchClient() {
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
-      let av: string | number = (a as Record<string, unknown>)[sortKey] as string | number;
-      let bv: string | number = (b as Record<string, unknown>)[sortKey] as string | number;
+      let av: string | number = (a as unknown as Record<string, string | number>)[sortKey];
+      let bv: string | number = (b as unknown as Record<string, string | number>)[sortKey];
       if (typeof av === "string") av = av.toLowerCase();
       if (typeof bv === "string") bv = bv.toLowerCase();
       if (av < bv) return sortDir === "asc" ? -1 : 1;
