@@ -85,16 +85,6 @@ export default function VideoResearchClient() {
     else { setSortKey(key); setSortDir("desc"); }
   }
 
-  const SortArrow = ({ col }: { col: SortKey }) => {
-    if (sortKey !== col)
-      return <span className="ml-1 text-gray-400/40 dark:text-gray-600/40">↕</span>;
-    return (
-      <span className="ml-1 text-brand-500 dark:text-brand-400">
-        {sortDir === "asc" ? "↑" : "↓"}
-      </span>
-    );
-  };
-
   return (
     <section className="space-y-6">
       <SectionHeader
