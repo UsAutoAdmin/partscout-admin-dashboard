@@ -111,28 +111,40 @@ export default function VideoResearchClient() {
       </div>
 
       <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/[0.03] overflow-hidden">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="min-w-full">
+        <div className="overflow-hidden">
+          <table className="w-full" style={{ tableLayout: "fixed" }}>
+            <colgroup>
+              <col style={{ width: "36px" }} />
+              <col style={{ width: "52px" }} />
+              <col style={{ width: "11%" }} />
+              <col style={{ width: "11%" }} />
+              <col />
+              <col style={{ width: "56px" }} />
+              <col style={{ width: "52px" }} />
+              <col style={{ width: "72px" }} />
+              <col style={{ width: "72px" }} />
+              <col style={{ width: "62px" }} />
+              <col style={{ width: "62px" }} />
+            </colgroup>
             <thead className="border-b border-gray-200 dark:border-gray-800">
               <tr>
-                <Th className="w-8">#</Th>
+                <Th>#</Th>
                 <ThSort col="year" current={sortKey} dir={sortDir} toggle={toggleSort}>Year</ThSort>
                 <ThSort col="make" current={sortKey} dir={sortDir} toggle={toggleSort}>Make</ThSort>
                 <ThSort col="model" current={sortKey} dir={sortDir} toggle={toggleSort}>Model</ThSort>
                 <ThSort col="part" current={sortKey} dir={sortDir} toggle={toggleSort}>Part</ThSort>
-                <ThSort col="active" current={sortKey} dir={sortDir} toggle={toggleSort} align="right" border>Active</ThSort>
+                <ThSort col="active" current={sortKey} dir={sortDir} toggle={toggleSort} align="right" border>Act</ThSort>
                 <ThSort col="sold" current={sortKey} dir={sortDir} toggle={toggleSort} align="right">Sold</ThSort>
-                <ThSort col="sell_through" current={sortKey} dir={sortDir} toggle={toggleSort} align="right">Sell Through</ThSort>
-                <ThSort col="sell_price" current={sortKey} dir={sortDir} toggle={toggleSort} align="right" border>Sell Price</ThSort>
-                <ThSort col="sold_confidence" current={sortKey} dir={sortDir} toggle={toggleSort} align="right" border>Confidence</ThSort>
+                <ThSort col="sell_through" current={sortKey} dir={sortDir} toggle={toggleSort} align="right">S/T</ThSort>
+                <ThSort col="sell_price" current={sortKey} dir={sortDir} toggle={toggleSort} align="right" border>Price</ThSort>
+                <ThSort col="sold_confidence" current={sortKey} dir={sortDir} toggle={toggleSort} align="right" border>Conf</ThSort>
                 <Th align="center" border>Verify</Th>
-                <Th className="w-8" />
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="py-16 text-center text-sm text-gray-400">
+                  <td colSpan={11} className="py-16 text-center text-sm text-gray-400">
                     <svg className="animate-spin h-5 w-5 mx-auto mb-2 text-brand-500" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -141,7 +153,7 @@ export default function VideoResearchClient() {
                   </td>
                 </tr>
               ) : sorted.length === 0 ? (
-                <tr><td colSpan={12} className="py-16 text-center text-sm text-gray-400">No parts match your search.</td></tr>
+                <tr><td colSpan={11} className="py-16 text-center text-sm text-gray-400">No parts match your search.</td></tr>
               ) : (
                 sorted.map((row, i) => (
                   <PartRow
@@ -180,11 +192,16 @@ function PartRow({ row, index, expanded, onToggle, onUpdate }: {
         }}
         className={`cursor-pointer transition-colors ${expanded ? "bg-brand-50/50 dark:bg-brand-500/[0.06]" : "hover:bg-gray-50 dark:hover:bg-white/[0.02]"}`}
       >
-        <Td className="text-gray-400 dark:text-gray-600 tabular-nums">{index + 1}</Td>
+        <Td className="text-gray-400 dark:text-gray-600 tabular-nums">
+          <span className="flex items-center gap-1">
+            <svg className={`h-3 w-3 flex-shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+            {index + 1}
+          </span>
+        </Td>
         <Td className="font-medium">{row.year}</Td>
-        <Td>{row.make}</Td>
-        <Td>{row.model}</Td>
-        <Td className="font-medium max-w-[260px] truncate">{row.part}</Td>
+        <Td className="truncate overflow-hidden">{row.make}</Td>
+        <Td className="truncate overflow-hidden">{row.model}</Td>
+        <Td className="font-medium truncate overflow-hidden">{row.part}</Td>
         <EditableNumCell value={row.active} rowId={row.id} field="active" border onUpdate={onUpdate} currentRow={row} />
         <EditableNumCell value={row.sold} rowId={row.id} field="sold" onUpdate={onUpdate} currentRow={row} />
         <Td align="right"><SellThroughPill value={row.sell_through} /></Td>
@@ -196,18 +213,11 @@ function PartRow({ row, index, expanded, onToggle, onUpdate }: {
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 rounded-md bg-blue-light-50 dark:bg-blue-light-500/10 px-2.5 py-1 text-xs font-medium text-blue-light-600 dark:text-blue-light-400 hover:bg-blue-light-100 dark:hover:bg-blue-light-500/20 transition-colors"
+            className="inline-flex items-center gap-1 rounded-md bg-blue-light-50 dark:bg-blue-light-500/10 px-2 py-1 text-xs font-medium text-blue-light-600 dark:text-blue-light-400 hover:bg-blue-light-100 dark:hover:bg-blue-light-500/20 transition-colors"
           >
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
-            Verify
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
+            <span className="sr-only">Verify</span>
           </a>
-        </Td>
-        <Td className="text-gray-400 dark:text-gray-500">
-          <svg className={`h-4 w-4 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
         </Td>
       </tr>
       {expanded && <ExpandedRow row={row} onUpdate={onUpdate} />}
@@ -220,7 +230,7 @@ function PartRow({ row, index, expanded, onToggle, onUpdate }: {
 function ExpandedRow({ row, onUpdate }: { row: ResearchPart; onUpdate: (id: string, u: Partial<ResearchPart>) => void }) {
   return (
     <tr className="bg-gray-50/50 dark:bg-white/[0.015]">
-      <td colSpan={12} className="px-6 py-5">
+      <td colSpan={11} className="px-6 py-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <ImageUploadCard
             label="Part Photo"
@@ -396,7 +406,7 @@ function EditableNumCell({ value, rowId, field, border, onUpdate, currentRow }: 
           onChange={(e) => setDraft(e.target.value)}
           onBlur={save}
           onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
-          className="w-16 rounded border border-brand-500 bg-white dark:bg-gray-900 px-1.5 py-0.5 text-sm text-right tabular-nums text-gray-900 dark:text-gray-100 outline-none"
+          className="w-14 rounded border border-brand-500 bg-white dark:bg-gray-900 px-1 py-0.5 text-xs text-right tabular-nums text-gray-900 dark:text-gray-100 outline-none"
         />
       </td>
     );
@@ -405,7 +415,7 @@ function EditableNumCell({ value, rowId, field, border, onUpdate, currentRow }: 
   return (
     <td
       onClick={startEdit}
-      className={`px-3 py-2.5 text-sm text-right tabular-nums text-gray-700 dark:text-gray-300 whitespace-nowrap cursor-pointer hover:bg-brand-50/50 dark:hover:bg-brand-500/[0.06] transition-colors ${border ? "border-l border-gray-200 dark:border-gray-800" : ""}`}
+      className={`px-2 py-2 text-xs text-right tabular-nums text-gray-700 dark:text-gray-300 whitespace-nowrap cursor-pointer hover:bg-brand-50/50 dark:hover:bg-brand-500/[0.06] transition-colors ${border ? "border-l border-gray-200 dark:border-gray-800" : ""}`}
       title="Click to edit"
     >
       {value}
@@ -448,7 +458,7 @@ function EditablePriceCell({ value, rowId, onUpdate, border }: {
     return (
       <td className={`px-1 py-1 ${border ? "border-l border-gray-200 dark:border-gray-800" : ""}`} onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-0.5">
-          <span className="text-xs text-gray-400">$</span>
+          <span className="text-[11px] text-gray-400">$</span>
           <input
             ref={inputRef}
             type="number"
@@ -457,7 +467,7 @@ function EditablePriceCell({ value, rowId, onUpdate, border }: {
             onChange={(e) => setDraft(e.target.value)}
             onBlur={save}
             onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
-            className="w-20 rounded border border-brand-500 bg-white dark:bg-gray-900 px-1.5 py-0.5 text-sm text-right tabular-nums text-gray-900 dark:text-gray-100 outline-none"
+            className="w-16 rounded border border-brand-500 bg-white dark:bg-gray-900 px-1 py-0.5 text-xs text-right tabular-nums text-gray-900 dark:text-gray-100 outline-none"
           />
         </div>
       </td>
@@ -467,10 +477,10 @@ function EditablePriceCell({ value, rowId, onUpdate, border }: {
   return (
     <td
       onClick={startEdit}
-      className={`px-3 py-2.5 text-sm text-right tabular-nums text-gray-700 dark:text-gray-300 whitespace-nowrap cursor-pointer hover:bg-brand-50/50 dark:hover:bg-brand-500/[0.06] transition-colors ${border ? "border-l border-gray-200 dark:border-gray-800" : ""}`}
+      className={`px-2 py-2 text-xs text-right tabular-nums text-gray-700 dark:text-gray-300 whitespace-nowrap cursor-pointer hover:bg-brand-50/50 dark:hover:bg-brand-500/[0.06] transition-colors ${border ? "border-l border-gray-200 dark:border-gray-800" : ""}`}
       title="Click to edit"
     >
-      {value != null ? `$${value.toFixed(2)}` : <span className="text-gray-300 dark:text-gray-700">—</span>}
+      {value != null ? `$${value.toFixed(0)}` : <span className="text-gray-300 dark:text-gray-700">—</span>}
     </td>
   );
 }
@@ -484,7 +494,7 @@ function Th({ children, align, border, className }: {
   className?: string;
 }) {
   return (
-    <th className={`px-3 py-3 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 whitespace-nowrap ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"} ${border ? "border-l border-gray-200 dark:border-gray-800" : ""} ${className ?? ""}`}>
+    <th className={`px-2 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 whitespace-nowrap ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"} ${border ? "border-l border-gray-200 dark:border-gray-800" : ""} ${className ?? ""}`}>
       {children}
     </th>
   );
@@ -503,7 +513,7 @@ function ThSort({ children, col, current, dir, toggle, align, border }: {
   return (
     <th
       onClick={() => toggle(col)}
-      className={`px-3 py-3 text-xs font-semibold uppercase tracking-wider whitespace-nowrap cursor-pointer select-none transition-colors hover:text-gray-900 dark:hover:text-gray-200 ${active ? "text-gray-900 dark:text-gray-200" : "text-gray-500 dark:text-gray-400"} ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"} ${border ? "border-l border-gray-200 dark:border-gray-800" : ""}`}
+      className={`px-2 py-2.5 text-[11px] font-semibold uppercase tracking-wider whitespace-nowrap cursor-pointer select-none transition-colors hover:text-gray-900 dark:hover:text-gray-200 ${active ? "text-gray-900 dark:text-gray-200" : "text-gray-500 dark:text-gray-400"} ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"} ${border ? "border-l border-gray-200 dark:border-gray-800" : ""}`}
     >
       {children}
       {active ? (
@@ -522,7 +532,7 @@ function Td({ children, align, border, className }: {
   className?: string;
 }) {
   return (
-    <td className={`px-3 py-2.5 text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"} ${border ? "border-l border-gray-200 dark:border-gray-800" : ""} ${className ?? ""}`}>
+    <td className={`px-2 py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"} ${border ? "border-l border-gray-200 dark:border-gray-800" : ""} ${className ?? ""}`}>
       {children}
     </td>
   );
@@ -533,7 +543,7 @@ function SellThroughPill({ value }: { value: number }) {
   if (value >= 120) { bg = "bg-success-50 dark:bg-success-500/10"; text = "text-success-600 dark:text-success-400"; }
   else if (value >= 100) { bg = "bg-success-50 dark:bg-success-500/10"; text = "text-success-500 dark:text-success-400"; }
   else { bg = "bg-warning-50 dark:bg-warning-500/10"; text = "text-warning-600 dark:text-warning-400"; }
-  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${bg} ${text}`}>{value.toFixed(1)}%</span>;
+  return <span className={`inline-block rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${bg} ${text}`}>{value.toFixed(0)}%</span>;
 }
 
 function ConfidencePill({ value }: { value: number }) {
@@ -542,5 +552,5 @@ function ConfidencePill({ value }: { value: number }) {
   if (pct >= 95) { bg = "bg-success-50 dark:bg-success-500/10"; text = "text-success-600 dark:text-success-400"; }
   else if (pct >= 85) { bg = "bg-blue-light-50 dark:bg-blue-light-500/10"; text = "text-blue-light-600 dark:text-blue-light-400"; }
   else { bg = "bg-warning-50 dark:bg-warning-500/10"; text = "text-warning-600 dark:text-warning-400"; }
-  return <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-semibold tabular-nums ${bg} ${text}`}>{pct}%</span>;
+  return <span className={`inline-block rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${bg} ${text}`}>{pct}%</span>;
 }
