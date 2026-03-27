@@ -1,4 +1,5 @@
-import pdfParse from "pdf-parse";
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const pdfParse = require("pdf-parse");
 
 export interface ScriptEntry {
   year?: string;
@@ -83,7 +84,6 @@ function parseLine(line: string): ScriptEntry | null {
   }
 
   // Find the make
-  const lower = cleaned.toLowerCase();
   let foundMake = "";
   let makeEndIdx = makeIdx;
 

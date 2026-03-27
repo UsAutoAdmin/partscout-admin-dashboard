@@ -1,5 +1,4 @@
 import { chromium, type Browser, type Page } from "playwright";
-import fs from "fs/promises";
 import sharp from "sharp";
 
 let _browser: Browser | null = null;
