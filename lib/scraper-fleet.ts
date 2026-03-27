@@ -11,8 +11,8 @@ export type FleetScraperStatus = {
   dashboardUrl: string;
   agentUrl: string;
   metrics?: {
-    sold: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number };
-    active: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number };
+    sold: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number; recentTasks?: any[] };
+    active: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number; recentTasks?: any[] };
   } | null;
   error?: string;
 };

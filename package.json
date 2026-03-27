@@ -10,10 +10,16 @@
     "validate:scraper-fleet": "node scripts/validate-scraper-fleet.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.80.0",
     "@supabase/supabase-js": "^2.99.3",
+    "@types/sharp": "^0.31.1",
+    "cheerio": "^1.2.0",
     "next": "14.2.35",
+    "pdf-parse": "^2.4.5",
+    "playwright": "^1.58.2",
     "react": "^18",
     "react-dom": "^18",
+    "sharp": "^0.34.5",
     "stripe": "^20.4.1"
   },
   "devDependencies": {

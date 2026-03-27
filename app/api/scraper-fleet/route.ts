@@ -11,13 +11,15 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const key = body?.key;
   const action = body?.action;
+  const mode = body?.mode;
+  const value = body?.value;
 
   if (!key || !action) {
     return NextResponse.json({ error: "Missing key or action" }, { status: 400 });
   }
 
   try {
-    const result = await controlScraperFleetMachineViaGateway(key, action);
+    const result = await controlScraperFleetMachineViaGateway(key, action, mode, value);
     return NextResponse.json(result);
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Fleet control failed" }, { status: 500 });

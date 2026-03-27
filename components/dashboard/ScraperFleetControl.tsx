@@ -2,6 +2,17 @@
 
 import { useEffect, useState } from "react";
 
+type RecentTask = {
+  time?: string;
+  workerId?: number;
+  query?: string;
+  count?: number | null;
+  error?: string;
+  durationMs?: number;
+  sellThrough?: number | null;
+  confidence?: number | null;
+};
+
 type FleetScraperStatus = {
   key: string;
   label: string;
@@ -13,13 +24,30 @@ type FleetScraperStatus = {
   dashboardUrl: string;
   agentUrl: string;
   metrics?: {
-    sold: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number };
-    active: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number };
+    sold: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number; recentTasks?: RecentTask[] };
+    active: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number; recentTasks?: RecentTask[] };
   } | null;
   error?: string;
 };
 
 type ControlDrafts = Record<string, { soldWorkers: number; soldBrowsers: number; activeWorkers: number; activeBrowsers: number }>;
+
+function renderTaskLine(mode: 'sold' | 'active', task: RecentTask) {
+  const parts = [
+    task.time || '—',
+    task.workerId != null ? `W${task.workerId}` : 'W?',
+    task.query || 'unknown query',
+  ];
+  if (task.error) {
+    parts.push(`ERR: ${task.error}`);
+  } else {
+    parts.push(`count=${task.count ?? '—'}`);
+  }
+  if (mode === 'sold' && task.sellThrough != null) parts.push(`sell-through=${task.sellThrough.toFixed(1)}%`);
+  if (mode === 'sold' && task.confidence != null) parts.push(`confidence=${Math.round(task.confidence * 100)}%`);
+  if (task.durationMs != null) parts.push(`${(task.durationMs / 1000).toFixed(1)}s`);
+  return parts.join(' • ');
+}
 
 export default function ScraperFleetControl() {
   const [machines, setMachines] = useState<FleetScraperStatus[]>([]);
@@ -27,6 +55,7 @@ export default function ScraperFleetControl() {
   const [working, setWorking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<ControlDrafts>({});
+  const localGatewayBase = 'http://127.0.0.1:3850';
 
   function syncDrafts(data: FleetScraperStatus[]) {
     const next: ControlDrafts = {};
@@ -42,7 +71,7 @@ export default function ScraperFleetControl() {
   }
 
   async function load() {
-    const res = await fetch('/api/scraper-fleet', { cache: 'no-store' });
+    const res = await fetch(`${localGatewayBase}/fleet/status`, { cache: 'no-store' });
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || 'Failed to load scraper fleet');
     setMachines(data);
@@ -57,7 +86,7 @@ export default function ScraperFleetControl() {
     setWorking(`${key}:${action}:${mode ?? 'global'}`);
     setError(null);
     try {
-      const res = await fetch('/api/scraper-fleet', {
+      const res = await fetch(`${localGatewayBase}/fleet/control`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, action, mode, value }),
@@ -82,12 +111,16 @@ export default function ScraperFleetControl() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">Scraper fleet</p>
           <h3 className="mt-1 text-lg font-semibold text-gray-900 dark:text-white/90">All three Mac minis</h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Control sold/active modes, workers, browsers, and view live key metrics from a single card.</p>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">This is the authoritative control surface. Use these cards for real status and control.</p>
         </div>
         <button onClick={() => load()} className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-brand-400 hover:text-brand-600 dark:border-gray-800 dark:text-gray-300 dark:hover:text-brand-300">Refresh fleet</button>
       </div>
 
       {error ? <div className="mt-4 text-sm text-red-600 dark:text-red-400">{error}</div> : null}
+
+      <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/20 dark:text-amber-200">
+        The old per-machine scraper dashboard pages are now debug-only and may show stale or misleading state after the new fleet control changes. Use the cards below as the source of truth for start/stop, workers, browsers, and real live rates.
+      </div>
 
       <div className="mt-5 grid gap-4 xl:grid-cols-3">
         {(loading ? [] : machines).map((machine) => {
@@ -152,14 +185,19 @@ export default function ScraperFleetControl() {
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <a href={machine.dashboardUrl} target="_blank" rel="noreferrer" className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:border-brand-400 hover:text-brand-600 dark:border-gray-800 dark:text-gray-300 dark:hover:text-brand-300">Open dashboard</a>
+                <a href={machine.dashboardUrl} target="_blank" rel="noreferrer" className="rounded-xl border border-amber-300 px-3 py-2 text-sm text-amber-900 hover:border-amber-400 hover:text-amber-950 dark:border-amber-800 dark:text-amber-200 dark:hover:text-amber-100">Open old debug dashboard</a>
                 <button onClick={() => act(machine.key, 'restart')} disabled={working !== null} className="rounded-xl bg-brand-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-60">{working === `${machine.key}:restart:global` ? 'Restarting…' : 'Restart scraper'}</button>
                 <button onClick={() => act(machine.key, 'stop')} disabled={working !== null} className="rounded-xl bg-red-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-60">{working === `${machine.key}:stop:global` ? 'Stopping…' : 'Stop scraper'}</button>
               </div>
 
               <div className="mt-4 rounded-xl bg-white p-3 dark:bg-white/[0.03]">
-                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">Recent log tail</div>
-                <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-600 dark:text-gray-300">{machine.logTail.length ? machine.logTail.join('\n') : 'No logs returned.'}</pre>
+                <div className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-gray-400 dark:text-gray-500">Live task feed</div>
+                <pre className="max-h-[220px] overflow-auto whitespace-pre-wrap text-xs leading-5 text-gray-600 dark:text-gray-300">{
+                  [
+                    ...(sold?.recentTasks?.slice(-5).map((task) => `[sold] ${renderTaskLine('sold', task)}`) ?? []),
+                    ...(active?.recentTasks?.slice(-5).map((task) => `[active] ${renderTaskLine('active', task)}`) ?? []),
+                  ].slice(-10).reverse().join('\n') || 'No live task feed returned.'
+                }</pre>
               </div>
             </div>
           );

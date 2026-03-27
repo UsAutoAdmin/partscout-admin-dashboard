@@ -22,4 +22,16 @@ export const TEXT_COLOR = "white";
 export const TEXT_BORDER_WIDTH = 4;
 export const TEXT_BORDER_COLOR = "black";
 
+export const CLICK_SFX_PATH = path.join(ASSETS_DIR, "click.mp3");
+
+export const OVERLAY_HOLD_SECONDS = 3;
+
 export const HOOKS_PER_BATCH = 5;
+
+/**
+ * Color grading applied to all raw footage (B-roll, talking head, body).
+ * Approximates CapCut exposure +20 and shadows +5.
+ *   brightness=0.04  → additive luminance lift (lifts shadows / dark tones)
+ *   gamma=1.12       → midtone/highlight exposure boost
+ */
+export const COLOR_GRADE_FILTER = "eq=brightness=0.04:gamma=1.12";
