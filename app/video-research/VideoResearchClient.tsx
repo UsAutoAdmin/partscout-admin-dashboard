@@ -17,6 +17,10 @@ interface ResearchPart {
   sell_through: number;
   sold_confidence: number;
   sell_price: number | null;
+  part_price: number | null;
+  part_price_card_url: string | null;
+  part_price_matched_name: string | null;
+  part_price_approved: boolean;
   image_url: string | null;
   sold_screenshot_url: string | null;
   checked: boolean;
@@ -26,7 +30,7 @@ interface ResearchPart {
   created_at: string;
 }
 
-type SortKey = "year" | "make" | "model" | "part" | "active" | "sold" | "sell_through" | "sold_confidence" | "sell_price" | "checked";
+type SortKey = "year" | "make" | "model" | "part" | "active" | "sold" | "sell_through" | "sold_confidence" | "sell_price" | "part_price" | "checked";
 type SortDir = "asc" | "desc";
 
 export default function VideoResearchClient() {
@@ -37,22 +41,51 @@ export default function VideoResearchClient() {
   const [sortKey, setSortKey] = useState<SortKey>("sell_through");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [matching, setMatching] = useState(false);
+  const [matchResult, setMatchResult] = useState<{ matched: number; unmatched: number } | null>(null);
+
+  const loadRows = useCallback(async () => {
+    const res = await fetch("/api/video-research");
+    const data = await res.json();
+    setRows(data.rows ?? []);
+    setMetrics({
+      total: data.total,
+      checkedCount: data.checkedCount ?? 0,
+      avgSellThrough: data.avgSellThrough,
+      avgConfidence: data.avgConfidence,
+      totalActive: data.totalActive,
+      totalSold: data.totalSold,
+    });
+    return data.rows ?? [];
+  }, []);
+
+  const runMatchPrices = useCallback(async (force: boolean) => {
+    setMatching(true);
+    setMatchResult(null);
+    try {
+      const res = await fetch("/api/video-research/match-prices", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ force }),
+      });
+      const result = await res.json();
+      setMatchResult({ matched: result.matched ?? 0, unmatched: result.unmatched ?? 0 });
+      await loadRows();
+    } catch (err) {
+      console.error("Match prices failed:", err);
+    }
+    setMatching(false);
+  }, [loadRows]);
 
   useEffect(() => {
-    fetch("/api/video-research")
-      .then((r) => r.json())
-      .then((data) => {
-        setRows(data.rows ?? []);
-        setMetrics({
-          total: data.total,
-          checkedCount: data.checkedCount ?? 0,
-          avgSellThrough: data.avgSellThrough,
-          avgConfidence: data.avgConfidence,
-          totalActive: data.totalActive,
-          totalSold: data.totalSold,
-        });
+    loadRows()
+      .then((rows) => {
+        if (rows.some((r: ResearchPart) => r.part_price == null)) {
+          runMatchPrices(false);
+        }
       })
       .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const updateRow = useCallback((id: string, updates: Partial<ResearchPart>) => {
@@ -110,6 +143,28 @@ export default function VideoResearchClient() {
             className="w-full rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-white/[0.03] py-2 pl-10 pr-4 text-sm text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-500 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
           />
         </div>
+        <button
+          onClick={() => runMatchPrices(true)}
+          disabled={matching}
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+        >
+          {matching ? (
+            <svg className="animate-spin h-3.5 w-3.5 text-brand-500" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : (
+            <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+            </svg>
+          )}
+          {matching ? "Matching..." : "Auto-Match Prices"}
+        </button>
+        {matchResult && !matching && (
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            {matchResult.matched} matched, {matchResult.unmatched} unmatched
+          </span>
+        )}
         <span className="text-xs text-gray-400 dark:text-gray-500">{filtered.length} of {rows.length} parts</span>
       </div>
 
@@ -127,6 +182,7 @@ export default function VideoResearchClient() {
               <col style={{ width: "48px" }} />
               <col style={{ width: "64px" }} />
               <col style={{ width: "66px" }} />
+              <col style={{ width: "62px" }} />
               <col style={{ width: "56px" }} />
               <col style={{ width: "56px" }} />
             </colgroup>
@@ -143,7 +199,8 @@ export default function VideoResearchClient() {
                 <ThSort col="active" current={sortKey} dir={sortDir} toggle={toggleSort} align="right" border>Act</ThSort>
                 <ThSort col="sold" current={sortKey} dir={sortDir} toggle={toggleSort} align="right">Sold</ThSort>
                 <ThSort col="sell_through" current={sortKey} dir={sortDir} toggle={toggleSort} align="right">S/T</ThSort>
-                <ThSort col="sell_price" current={sortKey} dir={sortDir} toggle={toggleSort} align="right" border>Price</ThSort>
+                <ThSort col="sell_price" current={sortKey} dir={sortDir} toggle={toggleSort} align="right" border>Sell $</ThSort>
+                <ThSort col="part_price" current={sortKey} dir={sortDir} toggle={toggleSort} align="right">Yard $</ThSort>
                 <ThSort col="sold_confidence" current={sortKey} dir={sortDir} toggle={toggleSort} align="right" border>Conf</ThSort>
                 <Th align="center" border>Verify</Th>
               </tr>
@@ -151,7 +208,7 @@ export default function VideoResearchClient() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="py-16 text-center text-sm text-gray-400">
+                  <td colSpan={13} className="py-16 text-center text-sm text-gray-400">
                     <svg className="animate-spin h-5 w-5 mx-auto mb-2 text-brand-500" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -160,7 +217,7 @@ export default function VideoResearchClient() {
                   </td>
                 </tr>
               ) : sorted.length === 0 ? (
-                <tr><td colSpan={12} className="py-16 text-center text-sm text-gray-400">No parts match your search.</td></tr>
+                <tr><td colSpan={13} className="py-16 text-center text-sm text-gray-400">No parts match your search.</td></tr>
               ) : (
                 sorted.map((row, i) => (
                   <PartRow
@@ -216,6 +273,17 @@ function PartRow({ row, index, expanded, onToggle, onUpdate }: {
         <EditableNumCell value={row.sold} rowId={row.id} field="sold" onUpdate={onUpdate} currentRow={row} />
         <Td align="right"><SellThroughPill value={row.sell_through} /></Td>
         <EditablePriceCell value={row.sell_price} rowId={row.id} onUpdate={onUpdate} border />
+        <Td align="right">
+          {row.part_price != null ? (
+            <span className={`tabular-nums ${row.part_price_approved ? "text-success-600 dark:text-success-400 font-semibold" : ""}`}>
+              ${row.part_price.toFixed(0)}
+            </span>
+          ) : matching ? (
+            <svg className="animate-spin h-3 w-3 mx-auto text-gray-400" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" /></svg>
+          ) : (
+            <span className="text-gray-300 dark:text-gray-700">&mdash;</span>
+          )}
+        </Td>
         <Td align="right" border><ConfidencePill value={row.sold_confidence} /></Td>
         <Td align="center" border>
           <a
@@ -238,10 +306,20 @@ function PartRow({ row, index, expanded, onToggle, onUpdate }: {
 /* ───────────────────── Expanded Row ───────────────────── */
 
 function ExpandedRow({ row, onUpdate }: { row: ResearchPart; onUpdate: (id: string, u: Partial<ResearchPart>) => void }) {
+  async function toggleApproval() {
+    const next = !row.part_price_approved;
+    onUpdate(row.id, { part_price_approved: next });
+    await fetch("/api/video-research", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: row.id, part_price_approved: next }),
+    });
+  }
+
   return (
     <tr className="bg-gray-50/50 dark:bg-white/[0.015]">
-      <td colSpan={12} className="px-6 py-5">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <td colSpan={13} className="px-6 py-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <ImageUploadCard
             label="Part Photo"
             field="image_url"
@@ -256,6 +334,58 @@ function ExpandedRow({ row, onUpdate }: { row: ResearchPart; onUpdate: (id: stri
             rowId={row.id}
             onUploaded={(url) => onUpdate(row.id, { sold_screenshot_url: url })}
           />
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">Part Price Card</p>
+            {row.part_price_card_url ? (
+              <div className="relative group">
+                <img
+                  src={row.part_price_card_url}
+                  alt="Part Price Card"
+                  className="rounded-xl border border-gray-200 dark:border-gray-800 max-h-64 w-full object-contain bg-white dark:bg-black/20"
+                />
+                <ImageUploadCard
+                  label=""
+                  field="part_price_card_url"
+                  currentUrl={null}
+                  rowId={row.id}
+                  onUploaded={(url) => onUpdate(row.id, { part_price_card_url: url })}
+                  replaceOnly
+                />
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed border-gray-300 dark:border-gray-700 py-10 px-4">
+                <svg className="h-8 w-8 text-gray-300 dark:text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-xs text-gray-400 dark:text-gray-500">No price match found</p>
+              </div>
+            )}
+            {row.part_price_matched_name && (
+              <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400 truncate" title={row.part_price_matched_name}>
+                Matched: <span className="font-medium text-gray-700 dark:text-gray-300">{row.part_price_matched_name}</span>
+                {row.part_price != null && <span className="ml-1 text-brand-600 dark:text-brand-400">(${row.part_price.toFixed(2)})</span>}
+              </p>
+            )}
+            <button
+              onClick={toggleApproval}
+              className="mt-3 inline-flex items-center gap-2 group"
+            >
+              <div className={`h-4 w-4 rounded border-2 flex items-center justify-center transition-colors ${
+                row.part_price_approved
+                  ? "bg-success-500 border-success-500"
+                  : "border-gray-300 dark:border-gray-600 group-hover:border-brand-500 dark:group-hover:border-brand-400"
+              }`}>
+                {row.part_price_approved && (
+                  <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
+              </div>
+              <span className={`text-xs font-medium ${row.part_price_approved ? "text-success-600 dark:text-success-400" : "text-gray-500 dark:text-gray-400"}`}>
+                {row.part_price_approved ? "Price Approved" : "Approve Price Match"}
+              </span>
+            </button>
+          </div>
         </div>
         {row.sold_link && (
           <div className="mt-4">
@@ -279,12 +409,13 @@ function ExpandedRow({ row, onUpdate }: { row: ResearchPart; onUpdate: (id: stri
 
 /* ───────────────────── Image Upload Card ───────────────────── */
 
-function ImageUploadCard({ label, field, currentUrl, rowId, onUploaded }: {
+function ImageUploadCard({ label, field, currentUrl, rowId, onUploaded, replaceOnly }: {
   label: string;
-  field: "image_url" | "sold_screenshot_url";
+  field: "image_url" | "sold_screenshot_url" | "part_price_card_url";
   currentUrl: string | null;
   rowId: string;
   onUploaded: (url: string) => void;
+  replaceOnly?: boolean;
 }) {
   const [uploading, setUploading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -321,9 +452,23 @@ function ImageUploadCard({ label, field, currentUrl, rowId, onUploaded }: {
     }
   }
 
+  if (replaceOnly) {
+    return (
+      <>
+        <button
+          onClick={() => inputRef.current?.click()}
+          className="absolute top-2 right-2 rounded-lg bg-black/60 px-2.5 py-1 text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity"
+        >
+          {uploading ? "Uploading..." : "Replace"}
+        </button>
+        <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+      </>
+    );
+  }
+
   return (
     <div>
-      <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">{label}</p>
+      {label && <p className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 mb-2">{label}</p>}
       {currentUrl ? (
         <div className="relative group">
           <img

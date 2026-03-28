@@ -13,8 +13,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "file, id, and field are required" }, { status: 400 });
   }
 
-  if (field !== "image_url" && field !== "sold_screenshot_url") {
-    return NextResponse.json({ error: "field must be image_url or sold_screenshot_url" }, { status: 400 });
+  if (field !== "image_url" && field !== "sold_screenshot_url" && field !== "part_price_card_url") {
+    return NextResponse.json({ error: "field must be image_url, sold_screenshot_url, or part_price_card_url" }, { status: 400 });
   }
 
   const ext = file.name.split(".").pop() ?? "png";

@@ -35,7 +35,7 @@ export async function GET() {
 export async function PATCH(req: NextRequest) {
   const supabase = getServiceRoleClient();
   const body = await req.json();
-  const { id, active, sold, sell_price, checked } = body;
+  const { id, active, sold, sell_price, checked, part_price_approved } = body;
 
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
@@ -43,6 +43,7 @@ export async function PATCH(req: NextRequest) {
   if (active !== undefined) updates.active = Number(active);
   if (sold !== undefined) updates.sold = Number(sold);
   if (checked !== undefined) updates.checked = Boolean(checked);
+  if (part_price_approved !== undefined) updates.part_price_approved = Boolean(part_price_approved);
   if (sell_price !== undefined) {
     updates.sell_price = sell_price === "" || sell_price === null ? null : Number(sell_price);
     if (updates.sell_price != null) updates.checked = true;
