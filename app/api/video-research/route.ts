@@ -6,9 +6,10 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const supabase = getServiceRoleClient();
 
-  const [{ count: total }, { data: rows, error }] = await Promise.all([
+  const [{ count: total }, { count: checkedCount }, { data: rows, error }] = await Promise.all([
     supabase.from("Video_Parts_for_research").select("*", { count: "exact", head: true }),
-    supabase.from("Video_Parts_for_research").select("*").order("sell_through", { ascending: false }).limit(1000),
+    supabase.from("Video_Parts_for_research").select("*", { count: "exact", head: true }).eq("checked", true),
+    supabase.from("Video_Parts_for_research").select("*").order("checked", { ascending: true }).order("sell_through", { ascending: false }).limit(1000),
   ]);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -22,6 +23,7 @@ export async function GET() {
 
   return NextResponse.json({
     total: total ?? 0,
+    checkedCount: checkedCount ?? 0,
     avgSellThrough: Math.round(avgSellThrough * 10) / 10,
     avgConfidence: Math.round(avgConfidence * 100),
     totalActive,
@@ -33,14 +35,18 @@ export async function GET() {
 export async function PATCH(req: NextRequest) {
   const supabase = getServiceRoleClient();
   const body = await req.json();
-  const { id, active, sold, sell_price } = body;
+  const { id, active, sold, sell_price, checked } = body;
 
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   const updates: Record<string, unknown> = {};
   if (active !== undefined) updates.active = Number(active);
   if (sold !== undefined) updates.sold = Number(sold);
-  if (sell_price !== undefined) updates.sell_price = sell_price === "" || sell_price === null ? null : Number(sell_price);
+  if (checked !== undefined) updates.checked = Boolean(checked);
+  if (sell_price !== undefined) {
+    updates.sell_price = sell_price === "" || sell_price === null ? null : Number(sell_price);
+    if (updates.sell_price != null) updates.checked = true;
+  }
 
   if (active !== undefined || sold !== undefined) {
     const newActive = active !== undefined ? Number(active) : undefined;

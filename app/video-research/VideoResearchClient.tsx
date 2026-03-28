@@ -19,19 +19,20 @@ interface ResearchPart {
   sell_price: number | null;
   image_url: string | null;
   sold_screenshot_url: string | null;
+  checked: boolean;
   original_url: string;
   sold_link: string | null;
   sold_verified_at: string | null;
   created_at: string;
 }
 
-type SortKey = "year" | "make" | "model" | "part" | "active" | "sold" | "sell_through" | "sold_confidence" | "sell_price";
+type SortKey = "year" | "make" | "model" | "part" | "active" | "sold" | "sell_through" | "sold_confidence" | "sell_price" | "checked";
 type SortDir = "asc" | "desc";
 
 export default function VideoResearchClient() {
   const [rows, setRows] = useState<ResearchPart[]>([]);
   const [loading, setLoading] = useState(true);
-  const [metrics, setMetrics] = useState({ total: 0, avgSellThrough: 0, avgConfidence: 0, totalActive: 0, totalSold: 0 });
+  const [metrics, setMetrics] = useState({ total: 0, checkedCount: 0, avgSellThrough: 0, avgConfidence: 0, totalActive: 0, totalSold: 0 });
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("sell_through");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -44,6 +45,7 @@ export default function VideoResearchClient() {
         setRows(data.rows ?? []);
         setMetrics({
           total: data.total,
+          checkedCount: data.checkedCount ?? 0,
           avgSellThrough: data.avgSellThrough,
           avgConfidence: data.avgConfidence,
           totalActive: data.totalActive,
@@ -69,8 +71,8 @@ export default function VideoResearchClient() {
     return [...filtered].sort((a, b) => {
       const aVal = a[sortKey];
       const bVal = b[sortKey];
-      const av = typeof aVal === "string" ? aVal.toLowerCase() : (aVal ?? 0);
-      const bv = typeof bVal === "string" ? bVal.toLowerCase() : (bVal ?? 0);
+      const av = typeof aVal === "boolean" ? (aVal ? 1 : 0) : typeof aVal === "string" ? aVal.toLowerCase() : (aVal ?? 0);
+      const bv = typeof bVal === "boolean" ? (bVal ? 1 : 0) : typeof bVal === "string" ? bVal.toLowerCase() : (bVal ?? 0);
       if (av < bv) return sortDir === "asc" ? -1 : 1;
       if (av > bv) return sortDir === "asc" ? 1 : -1;
       return 0;
@@ -86,8 +88,9 @@ export default function VideoResearchClient() {
     <section className="space-y-6">
       <SectionHeader title="Video Research Parts" subtitle="1,000-part sample — sell-through 80–150%, confidence > 80%. Click a row to expand, edit values inline." />
 
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-6">
         <MetricCard label="Total Parts" value={fmtNum(metrics.total)} color="brand" />
+        <MetricCard label="Checked" value={`${metrics.checkedCount} / ${metrics.total}`} color={metrics.checkedCount === metrics.total ? "success" : "warning"} subtext={`${metrics.total ? Math.round((metrics.checkedCount / metrics.total) * 100) : 0}% complete`} />
         <MetricCard label="Avg Sell-Through" value={`${metrics.avgSellThrough}%`} color="success" />
         <MetricCard label="Avg Confidence" value={`${metrics.avgConfidence}%`} color="info" />
         <MetricCard label="Total Active" value={fmtNum(metrics.totalActive)} />
@@ -114,20 +117,24 @@ export default function VideoResearchClient() {
         <div className="overflow-hidden">
           <table className="w-full" style={{ tableLayout: "fixed" }}>
             <colgroup>
-              <col style={{ width: "36px" }} />
-              <col style={{ width: "52px" }} />
-              <col style={{ width: "11%" }} />
-              <col style={{ width: "11%" }} />
+              <col style={{ width: "32px" }} />
+              <col style={{ width: "32px" }} />
+              <col style={{ width: "48px" }} />
+              <col style={{ width: "10%" }} />
+              <col style={{ width: "10%" }} />
               <col />
+              <col style={{ width: "50px" }} />
+              <col style={{ width: "48px" }} />
+              <col style={{ width: "64px" }} />
+              <col style={{ width: "66px" }} />
               <col style={{ width: "56px" }} />
-              <col style={{ width: "52px" }} />
-              <col style={{ width: "72px" }} />
-              <col style={{ width: "72px" }} />
-              <col style={{ width: "62px" }} />
-              <col style={{ width: "62px" }} />
+              <col style={{ width: "56px" }} />
             </colgroup>
             <thead className="border-b border-gray-200 dark:border-gray-800">
               <tr>
+                <ThSort col="checked" current={sortKey} dir={sortDir} toggle={toggleSort} align="center">
+                  <svg className="h-3.5 w-3.5 mx-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                </ThSort>
                 <Th>#</Th>
                 <ThSort col="year" current={sortKey} dir={sortDir} toggle={toggleSort}>Year</ThSort>
                 <ThSort col="make" current={sortKey} dir={sortDir} toggle={toggleSort}>Make</ThSort>
@@ -144,7 +151,7 @@ export default function VideoResearchClient() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="py-16 text-center text-sm text-gray-400">
+                  <td colSpan={12} className="py-16 text-center text-sm text-gray-400">
                     <svg className="animate-spin h-5 w-5 mx-auto mb-2 text-brand-500" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -153,7 +160,7 @@ export default function VideoResearchClient() {
                   </td>
                 </tr>
               ) : sorted.length === 0 ? (
-                <tr><td colSpan={11} className="py-16 text-center text-sm text-gray-400">No parts match your search.</td></tr>
+                <tr><td colSpan={12} className="py-16 text-center text-sm text-gray-400">No parts match your search.</td></tr>
               ) : (
                 sorted.map((row, i) => (
                   <PartRow
@@ -190,8 +197,11 @@ function PartRow({ row, index, expanded, onToggle, onUpdate }: {
           if ((e.target as HTMLElement).closest("input, a, button")) return;
           onToggle();
         }}
-        className={`cursor-pointer transition-colors ${expanded ? "bg-brand-50/50 dark:bg-brand-500/[0.06]" : "hover:bg-gray-50 dark:hover:bg-white/[0.02]"}`}
+        className={`cursor-pointer transition-colors ${expanded ? "bg-brand-50/50 dark:bg-brand-500/[0.06]" : row.checked ? "bg-success-50/30 dark:bg-success-500/[0.03] hover:bg-success-50/60 dark:hover:bg-success-500/[0.06]" : "hover:bg-gray-50 dark:hover:bg-white/[0.02]"}`}
       >
+        <td className="px-2 py-2 text-center" onClick={(e) => e.stopPropagation()}>
+          <CheckboxCell checked={row.checked} rowId={row.id} onUpdate={onUpdate} />
+        </td>
         <Td className="text-gray-400 dark:text-gray-600 tabular-nums">
           <span className="flex items-center gap-1">
             <svg className={`h-3 w-3 flex-shrink-0 transition-transform ${expanded ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
@@ -230,7 +240,7 @@ function PartRow({ row, index, expanded, onToggle, onUpdate }: {
 function ExpandedRow({ row, onUpdate }: { row: ResearchPart; onUpdate: (id: string, u: Partial<ResearchPart>) => void }) {
   return (
     <tr className="bg-gray-50/50 dark:bg-white/[0.015]">
-      <td colSpan={11} className="px-6 py-5">
+      <td colSpan={12} className="px-6 py-5">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <ImageUploadCard
             label="Part Photo"
@@ -357,6 +367,40 @@ function ImageUploadCard({ label, field, currentUrl, rowId, onUploaded }: {
   );
 }
 
+/* ───────────────────── Checkbox Cell ───────────────────── */
+
+function CheckboxCell({ checked, rowId, onUpdate }: {
+  checked: boolean;
+  rowId: string;
+  onUpdate: (id: string, u: Partial<ResearchPart>) => void;
+}) {
+  async function toggle() {
+    const next = !checked;
+    onUpdate(rowId, { checked: next });
+    await fetch("/api/video-research", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: rowId, checked: next }),
+    });
+  }
+
+  return (
+    <button onClick={toggle} className="group flex items-center justify-center">
+      <div className={`h-4 w-4 rounded border-2 flex items-center justify-center transition-colors ${
+        checked
+          ? "bg-success-500 border-success-500 dark:bg-success-500 dark:border-success-500"
+          : "border-gray-300 dark:border-gray-600 group-hover:border-brand-500 dark:group-hover:border-brand-400"
+      }`}>
+        {checked && (
+          <svg className="h-3 w-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        )}
+      </div>
+    </button>
+  );
+}
+
 /* ───────────────────── Editable Cells ───────────────────── */
 
 function EditableNumCell({ value, rowId, field, border, onUpdate, currentRow }: {
@@ -445,7 +489,9 @@ function EditablePriceCell({ value, rowId, onUpdate, border }: {
     const num = draft === "" ? null : parseFloat(draft) || 0;
     if (num === value) return;
 
-    onUpdate(rowId, { sell_price: num });
+    const updates: Partial<ResearchPart> = { sell_price: num };
+    if (num != null) updates.checked = true;
+    onUpdate(rowId, updates);
 
     await fetch("/api/video-research", {
       method: "PATCH",
