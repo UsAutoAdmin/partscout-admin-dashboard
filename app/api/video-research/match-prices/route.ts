@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
   const query = supabase
     .from("Video_Parts_for_research")
     .select("id, part")
+    .not("sell_price", "is", null)
     .order("id");
 
   if (!force) query.is("part_price", null);

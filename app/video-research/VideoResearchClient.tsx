@@ -80,7 +80,7 @@ export default function VideoResearchClient() {
   useEffect(() => {
     loadRows()
       .then((rows) => {
-        if (rows.some((r: ResearchPart) => r.part_price == null)) {
+        if (rows.some((r: ResearchPart) => r.sell_price != null && r.part_price == null)) {
           runMatchPrices(false);
         }
       })
