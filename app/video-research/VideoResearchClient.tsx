@@ -227,6 +227,7 @@ export default function VideoResearchClient() {
                     expanded={expandedId === row.id}
                     onToggle={() => setExpandedId(expandedId === row.id ? null : row.id)}
                     onUpdate={updateRow}
+                    matching={matching}
                   />
                 ))
               )}
@@ -240,12 +241,13 @@ export default function VideoResearchClient() {
 
 /* ───────────────────── Part Row ───────────────────── */
 
-function PartRow({ row, index, expanded, onToggle, onUpdate }: {
+function PartRow({ row, index, expanded, onToggle, onUpdate, matching }: {
   row: ResearchPart;
   index: number;
   expanded: boolean;
   onToggle: () => void;
   onUpdate: (id: string, updates: Partial<ResearchPart>) => void;
+  matching: boolean;
 }) {
   return (
     <>
