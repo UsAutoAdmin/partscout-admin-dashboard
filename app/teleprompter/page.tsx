@@ -35,7 +35,8 @@ export default function TeleprompterPage() {
       lastTimeRef.current = t;
       const pxPerSec = speed * 80;
       scrollPosRef.current += dt * 0.001 * pxPerSec;
-      const maxScroll = Math.max(0, prompterRef.current.offsetHeight - viewRef.current.clientHeight + 80);
+      const wrapper = prompterRef.current.parentElement;
+      const maxScroll = Math.max(0, (wrapper?.scrollHeight ?? prompterRef.current.offsetHeight) - viewRef.current.clientHeight);
       if (scrollPosRef.current >= maxScroll) {
         scrollPosRef.current = maxScroll;
         stopScroll();
@@ -189,7 +190,7 @@ export default function TeleprompterPage() {
           {/* Center guide line */}
           <div className={`absolute left-0 right-0 top-1/3 h-px ${isFullscreen ? "bg-white/10" : "bg-brand-500/20"}`} />
 
-          <div className="pt-[33vh] px-8 w-full max-w-3xl">
+          <div className="pt-[33vh] pb-[67vh] px-8 w-full max-w-3xl">
             <div
               ref={prompterRef}
               className={`text-center whitespace-pre-wrap break-words leading-[1.6] transition-none ${
