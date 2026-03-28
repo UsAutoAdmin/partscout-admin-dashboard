@@ -206,9 +206,10 @@ export default function VideoResearchClient() {
               <col style={{ width: "32px" }} />
               <col style={{ width: "32px" }} />
               <col style={{ width: "48px" }} />
-              <col style={{ width: "10%" }} />
-              <col style={{ width: "10%" }} />
+              <col style={{ width: "9%" }} />
+              <col style={{ width: "9%" }} />
               <col />
+              <col style={{ width: "12%" }} />
               <col style={{ width: "50px" }} />
               <col style={{ width: "48px" }} />
               <col style={{ width: "64px" }} />
@@ -227,6 +228,7 @@ export default function VideoResearchClient() {
                 <ThSort col="make" current={sortKey} dir={sortDir} toggle={toggleSort}>Make</ThSort>
                 <ThSort col="model" current={sortKey} dir={sortDir} toggle={toggleSort}>Model</ThSort>
                 <ThSort col="part" current={sortKey} dir={sortDir} toggle={toggleSort}>Part</ThSort>
+                <Th>Nickname</Th>
                 <ThSort col="active" current={sortKey} dir={sortDir} toggle={toggleSort} align="right" border>Act</ThSort>
                 <ThSort col="sold" current={sortKey} dir={sortDir} toggle={toggleSort} align="right">Sold</ThSort>
                 <ThSort col="sell_through" current={sortKey} dir={sortDir} toggle={toggleSort} align="right">S/T</ThSort>
@@ -239,7 +241,7 @@ export default function VideoResearchClient() {
             <tbody className="divide-y divide-gray-200 dark:divide-gray-800">
               {loading ? (
                 <tr>
-                  <td colSpan={13} className="py-16 text-center text-sm text-gray-400">
+                  <td colSpan={14} className="py-16 text-center text-sm text-gray-400">
                     <svg className="animate-spin h-5 w-5 mx-auto mb-2 text-brand-500" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -248,7 +250,7 @@ export default function VideoResearchClient() {
                   </td>
                 </tr>
               ) : sorted.length === 0 ? (
-                <tr><td colSpan={13} className="py-16 text-center text-sm text-gray-400">No parts match your search.</td></tr>
+                <tr><td colSpan={14} className="py-16 text-center text-sm text-gray-400">No parts match your search.</td></tr>
               ) : (
                 sorted.map((row, i) => (
                   <PartRow
@@ -302,6 +304,7 @@ function PartRow({ row, index, expanded, onToggle, onUpdate, matching }: {
         <Td className="truncate overflow-hidden">{row.make}</Td>
         <Td className="truncate overflow-hidden">{row.model}</Td>
         <Td className="font-medium truncate overflow-hidden">{row.part}</Td>
+        <EditableTextCell value={row.nickname} rowId={row.id} field="nickname" onUpdate={onUpdate} placeholder="Add nickname..." />
         <EditableNumCell value={row.active} rowId={row.id} field="active" border onUpdate={onUpdate} currentRow={row} />
         <EditableNumCell value={row.sold} rowId={row.id} field="sold" onUpdate={onUpdate} currentRow={row} />
         <Td align="right"><SellThroughPill value={row.sell_through} /></Td>
@@ -339,20 +342,6 @@ function PartRow({ row, index, expanded, onToggle, onUpdate, matching }: {
 /* ───────────────────── Expanded Row ───────────────────── */
 
 function ExpandedRow({ row, onUpdate }: { row: ResearchPart; onUpdate: (id: string, u: Partial<ResearchPart>) => void }) {
-  const [nickDraft, setNickDraft] = useState(row.nickname ?? "");
-  const nickRef = useRef<HTMLInputElement>(null);
-
-  async function saveNickname() {
-    const val = nickDraft.trim();
-    if (val === (row.nickname ?? "")) return;
-    onUpdate(row.id, { nickname: val || null });
-    await fetch("/api/video-research", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: row.id, nickname: val }),
-    });
-  }
-
   async function toggleApproval() {
     const next = !row.part_price_approved;
     onUpdate(row.id, { part_price_approved: next });
@@ -365,22 +354,7 @@ function ExpandedRow({ row, onUpdate }: { row: ResearchPart; onUpdate: (id: stri
 
   return (
     <tr className="bg-gray-50/50 dark:bg-white/[0.015]">
-      <td colSpan={13} className="px-6 py-5">
-        <div className="mb-5">
-          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-1.5">
-            Nickname <span className="normal-case font-normal text-gray-400 dark:text-gray-500">(optional — simpler name for AI scripting)</span>
-          </label>
-          <input
-            ref={nickRef}
-            type="text"
-            value={nickDraft}
-            onChange={(e) => setNickDraft(e.target.value)}
-            onBlur={saveNickname}
-            onKeyDown={(e) => { if (e.key === "Enter") nickRef.current?.blur(); }}
-            placeholder={`e.g. "${row.part}" is fine, or enter a simpler name...`}
-            className="w-full max-w-md rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] px-3 py-1.5 text-sm text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-600 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
-          />
-        </div>
+      <td colSpan={14} className="px-6 py-5">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <ImageUploadCard
             label="Part Photo"
@@ -734,6 +708,63 @@ function EditablePriceCell({ value, rowId, onUpdate, border }: {
       title="Click to edit"
     >
       {value != null ? `$${value.toFixed(0)}` : <span className="text-gray-300 dark:text-gray-700">—</span>}
+    </td>
+  );
+}
+
+function EditableTextCell({ value, rowId, field, onUpdate, placeholder }: {
+  value: string | null;
+  rowId: string;
+  field: "nickname";
+  onUpdate: (id: string, u: Partial<ResearchPart>) => void;
+  placeholder?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value ?? "");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  function startEdit(e: React.MouseEvent) {
+    e.stopPropagation();
+    setDraft(value ?? "");
+    setEditing(true);
+    setTimeout(() => inputRef.current?.select(), 0);
+  }
+
+  async function save() {
+    setEditing(false);
+    const trimmed = draft.trim();
+    if (trimmed === (value ?? "")) return;
+    onUpdate(rowId, { [field]: trimmed || null });
+    await fetch("/api/video-research", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: rowId, [field]: trimmed }),
+    });
+  }
+
+  if (editing) {
+    return (
+      <td className="px-1 py-1" onClick={(e) => e.stopPropagation()}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={save}
+          onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
+          className="w-full rounded border border-brand-500 bg-white dark:bg-gray-900 px-1.5 py-0.5 text-xs text-gray-900 dark:text-gray-100 outline-none"
+        />
+      </td>
+    );
+  }
+
+  return (
+    <td
+      onClick={startEdit}
+      className="px-2 py-2 text-xs text-gray-500 dark:text-gray-400 truncate overflow-hidden cursor-pointer hover:bg-brand-50/50 dark:hover:bg-brand-500/[0.06] transition-colors"
+      title={value ? `Nickname: ${value}` : "Click to add nickname"}
+    >
+      {value || <span className="text-gray-300 dark:text-gray-700 italic">{placeholder}</span>}
     </td>
   );
 }
