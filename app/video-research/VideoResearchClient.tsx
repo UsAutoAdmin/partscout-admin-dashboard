@@ -21,6 +21,7 @@ interface ResearchPart {
   part_price_card_url: string | null;
   part_price_matched_name: string | null;
   part_price_approved: boolean;
+  nickname: string | null;
   image_url: string | null;
   sold_screenshot_url: string | null;
   checked: boolean;
@@ -117,6 +118,26 @@ export default function VideoResearchClient() {
     else { setSortKey(key); setSortDir("desc"); }
   }
 
+  function exportForScripting() {
+    const ready = rows.filter((r) => r.sell_price != null);
+    const payload = ready.map((r) => ({
+      year: r.year,
+      make: r.make,
+      model: r.model,
+      part: r.part,
+      nickname: r.nickname || null,
+      sell_price: r.sell_price,
+      cost: r.part_price,
+    }));
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "video-research-parts.json";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   return (
     <section className="space-y-6">
       <SectionHeader title="Video Research Parts" subtitle="1,000-part sample — sell-through 80–150%, confidence > 80%. Click a row to expand, edit values inline." />
@@ -159,6 +180,16 @@ export default function VideoResearchClient() {
             </svg>
           )}
           {matching ? "Matching..." : "Auto-Match Prices"}
+        </button>
+        <button
+          onClick={exportForScripting}
+          disabled={!rows.some((r) => r.sell_price != null)}
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] px-3 py-2 text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-white/[0.06] transition-colors disabled:opacity-50"
+        >
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Export for Scripting
         </button>
         {matchResult && !matching && (
           <span className="text-xs text-gray-400 dark:text-gray-500">
@@ -308,6 +339,20 @@ function PartRow({ row, index, expanded, onToggle, onUpdate, matching }: {
 /* ───────────────────── Expanded Row ───────────────────── */
 
 function ExpandedRow({ row, onUpdate }: { row: ResearchPart; onUpdate: (id: string, u: Partial<ResearchPart>) => void }) {
+  const [nickDraft, setNickDraft] = useState(row.nickname ?? "");
+  const nickRef = useRef<HTMLInputElement>(null);
+
+  async function saveNickname() {
+    const val = nickDraft.trim();
+    if (val === (row.nickname ?? "")) return;
+    onUpdate(row.id, { nickname: val || null });
+    await fetch("/api/video-research", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: row.id, nickname: val }),
+    });
+  }
+
   async function toggleApproval() {
     const next = !row.part_price_approved;
     onUpdate(row.id, { part_price_approved: next });
@@ -321,6 +366,21 @@ function ExpandedRow({ row, onUpdate }: { row: ResearchPart; onUpdate: (id: stri
   return (
     <tr className="bg-gray-50/50 dark:bg-white/[0.015]">
       <td colSpan={13} className="px-6 py-5">
+        <div className="mb-5">
+          <label className="text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400 block mb-1.5">
+            Nickname <span className="normal-case font-normal text-gray-400 dark:text-gray-500">(optional — simpler name for AI scripting)</span>
+          </label>
+          <input
+            ref={nickRef}
+            type="text"
+            value={nickDraft}
+            onChange={(e) => setNickDraft(e.target.value)}
+            onBlur={saveNickname}
+            onKeyDown={(e) => { if (e.key === "Enter") nickRef.current?.blur(); }}
+            placeholder={`e.g. "${row.part}" is fine, or enter a simpler name...`}
+            className="w-full max-w-md rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.03] px-3 py-1.5 text-sm text-gray-900 dark:text-gray-200 placeholder-gray-400 dark:placeholder-gray-600 outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+          />
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <ImageUploadCard
             label="Part Photo"
