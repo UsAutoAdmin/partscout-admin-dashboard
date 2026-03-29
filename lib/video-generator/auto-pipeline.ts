@@ -8,9 +8,8 @@ import {
   trimSegmentEdges,
   validateBodySegment,
   extractSegment,
-  Segment,
 } from "./silence-detect";
-import { extractAudio, transcribeWithTimestamps, TranscriptWord } from "./transcribe";
+import { extractAudio, transcribeWithTimestamps } from "./transcribe";
 import { detectOverlayTimestamps, OverlayDetectionResult } from "./overlay-detect";
 import { matchScriptEntry } from "./script-sheet";
 import { generateHookTexts } from "./hook-banner";
@@ -23,44 +22,9 @@ import { analyzeHookQuality } from "./stumble-detect";
 import { captionsForSegment, CaptionChunk } from "./captions";
 import { enqueueJob, registerPipelineRunner, getQueuePosition } from "./job-queue";
 import { runPipelineRemote } from "./remote-pipeline";
+import type { AutoJobStatus, HookFlag } from "./pipeline-types";
 
-export type AutoPhase =
-  | "queued"
-  | "uploading"
-  | "analyzing"
-  | "splitting"
-  | "transcribing"
-  | "detecting"
-  | "fetching_overlays"
-  | "composing_body"
-  | "generating_hooks"
-  | "done"
-  | "error";
-
-export interface HookFlag {
-  index: number;
-  flagged: boolean;
-  reason?: string;
-}
-
-export interface AutoJobStatus {
-  id: string;
-  phase: AutoPhase;
-  progress: string;
-  currentHook: number;
-  totalHooks: number;
-  outputFiles: string[];
-  videoName: string;
-  error?: string;
-  createdAt: number;
-  completedAt?: number;
-  hookFlags?: HookFlag[];
-  segments?: Segment[];
-  transcript?: TranscriptWord[];
-  overlayDetection?: OverlayDetectionResult;
-  overlaySlots?: { slot: string; filename: string }[];
-  hookTexts?: string[];
-}
+export type { AutoPhase, AutoJobStatus, HookFlag } from "./pipeline-types";
 
 const globalKey = "__auto_pipeline_jobs__" as const;
 const globalStore = globalThis as unknown as Record<string, Map<string, AutoJobStatus>>;

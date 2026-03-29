@@ -41,7 +41,7 @@ import { buildSoldSearchUrl, scrapeEbaySoldListings, closeBrowser as closeEbayBr
 import { OverlayEntry } from "./body-pipeline";
 import { analyzeHookQuality } from "./stumble-detect";
 import { captionsForSegment, CaptionChunk, buildCaptionDrawtext } from "./captions";
-import { AutoJobStatus, HookFlag } from "./auto-pipeline";
+import type { AutoJobStatus, HookFlag } from "./pipeline-types";
 
 const execAsync = promisify(execCb);
 const SSH_USER = "chaseeriksson";
