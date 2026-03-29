@@ -41,6 +41,7 @@ def main():
                     "word": w.word.strip(),
                     "start": round(w.start, 3),
                     "end": round(w.end, 3),
+                    "probability": round(w.probability, 4),
                 })
 
     result = {

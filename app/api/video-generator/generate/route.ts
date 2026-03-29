@@ -10,6 +10,8 @@ import {
   checkRemoteAvailable,
   processHookWithBodyRemote,
 } from "@/lib/video-generator/remote-ffmpeg";
+import { captionsForSegment, CaptionChunk } from "@/lib/video-generator/captions";
+import type { TranscriptWord } from "@/lib/video-generator/transcribe";
 
 interface OverlayInput {
   slot: "part" | "car" | "price" | "soldPrice";
@@ -17,13 +19,28 @@ interface OverlayInput {
   timestamp: number;
 }
 
+interface SegmentInput {
+  label: string;
+  start: number;
+  end: number;
+  index: number;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { jobId, overlays: overlayInputs, hookTexts: inputHookTexts } = body as {
+    const {
+      jobId,
+      overlays: overlayInputs,
+      hookTexts: inputHookTexts,
+      transcript,
+      segments,
+    } = body as {
       jobId: string;
       overlays: OverlayInput[];
       hookTexts?: string[];
+      transcript?: TranscriptWord[];
+      segments?: SegmentInput[];
     };
 
     if (!jobId) {
@@ -68,10 +85,30 @@ export async function POST(req: NextRequest) {
 
     (async () => {
       try {
-        const composedBodyPath = path.join(jobDir, "body_composed.mp4");
-        await composeBody(bodySegmentPath, overlayEntries, composedBodyPath);
+        // Generate captions if transcript is available
+        let bodyCaptions: CaptionChunk[] | undefined;
+        const hookCaptionSets: (CaptionChunk[] | undefined)[] = [];
+        const bodySegInfo = segments?.find((s) => s.label === "Body");
+        const hookSegInfos = segments?.filter((s) => s.label.startsWith("Hook")) ?? [];
 
-        // Discover available remote workers (SSH + FFmpeg reachable)
+        if (transcript && transcript.length > 0) {
+          if (bodySegInfo) {
+            bodyCaptions = await captionsForSegment(transcript, bodySegInfo.start, bodySegInfo.end);
+          }
+          for (const hookSeg of hookSegInfos) {
+            hookCaptionSets.push(await captionsForSegment(transcript, hookSeg.start, hookSeg.end));
+          }
+        }
+
+        const composedBodyPath = path.join(jobDir, "body_composed.mp4");
+        await composeBody(
+          bodySegmentPath,
+          overlayEntries,
+          composedBodyPath,
+          bodyCaptions,
+          bodySegInfo?.start
+        );
+
         const availableRemotes: string[] = [];
         const checks = await Promise.all(
           REMOTE_WORKERS.map(async (w) => ({
@@ -89,8 +126,6 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Build a pool: local slot + each available remote
-        // Round-robin assign hooks to workers for maximum parallelism
         type Worker = { type: "local" } | { type: "remote"; host: string };
         const workers: Worker[] = [{ type: "local" }];
         for (const host of availableRemotes) {
@@ -102,7 +137,6 @@ export async function POST(req: NextRequest) {
         let completed = 0;
         const pending = hookFiles.map((file, idx) => ({ file, idx }));
 
-        // Process all hooks concurrently, one per worker at a time
         const processNext = async (worker: Worker): Promise<void> => {
           while (pending.length > 0) {
             const item = pending.shift();
@@ -113,6 +147,9 @@ export async function POST(req: NextRequest) {
             const outputPath = path.join(outputDir, outputFile);
 
             const hookText = inputHookTexts?.[idx] || undefined;
+            const hookCaptions = hookCaptionSets[idx] || undefined;
+            const hookSeg = hookSegInfos[idx];
+
             let brollFile: string;
             try {
               if (worker.type === "remote") {
@@ -120,7 +157,10 @@ export async function POST(req: NextRequest) {
                   hookPath,
                   composedBodyPath,
                   outputPath,
-                  worker.host
+                  worker.host,
+                  hookText,
+                  hookCaptions,
+                  hookSeg?.start
                 );
                 brollFile = result.brollFile;
               } else {
@@ -128,7 +168,9 @@ export async function POST(req: NextRequest) {
                   hookPath,
                   composedBodyPath,
                   outputPath,
-                  hookText
+                  hookText,
+                  hookCaptions,
+                  hookSeg?.start
                 );
                 brollFile = result.brollFile;
               }
@@ -139,7 +181,9 @@ export async function POST(req: NextRequest) {
                   hookPath,
                   composedBodyPath,
                   outputPath,
-                  hookText
+                  hookText,
+                  hookCaptions,
+                  hookSeg?.start
                 );
                 brollFile = result.brollFile;
               } else {

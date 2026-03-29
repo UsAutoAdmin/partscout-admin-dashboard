@@ -13,6 +13,7 @@ import {
   COLOR_GRADE_FILTER,
 } from "./constants";
 import { generateBannerImage } from "./hook-banner";
+import { buildCaptionDrawtext, CaptionChunk } from "./captions";
 
 const execAsync = promisify(execCb);
 const SSH_USER = "chaseeriksson";
@@ -105,7 +106,9 @@ export async function processHookWithBodyRemote(
   composedBodyPath: string,
   outputPath: string,
   host: string,
-  hookText?: string
+  hookText?: string,
+  hookCaptions?: CaptionChunk[],
+  hookSegmentStart?: number
 ): Promise<{ brollFile: string }> {
   const workId = crypto.randomBytes(6).toString("hex");
   const remoteDir = `/tmp/vgen_${workId}`;
@@ -165,9 +168,15 @@ export async function processHookWithBodyRemote(
 
   const gradeFilter = `,${COLOR_GRADE_FILTER}`;
   const exactSize = `,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}`;
-  const brollFilter = `[0:v]scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIDEO_WIDTH}:${HALF_HEIGHT},setsar=1${lutFilter}${gradeFilter}${exactSize},setpts=PTS-STARTPTS,format=yuv420p[broll]`;
-  const headFilter = `[1:v]scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIDEO_WIDTH}:${HALF_HEIGHT},setsar=1${lutFilter}${gradeFilter}${exactSize},format=yuv420p[head]`;
-  const stackFilter = `[broll][head]vstack=inputs=2[stacked]`;
+  const brollFilter = `[0:v]setsar=1,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase:force_divisible_by=2,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}:(iw-${VIDEO_WIDTH})/2:(ih-${HALF_HEIGHT})/2${lutFilter}${gradeFilter}${exactSize},setpts=PTS-STARTPTS,format=yuv420p[broll]`;
+  const headFilter = `[1:v]setsar=1,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase:force_divisible_by=2,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}:(iw-${VIDEO_WIDTH})/2:(ih-${HALF_HEIGHT})/2${lutFilter}${gradeFilter}${exactSize},format=yuv420p[head]`;
+  const captionFilter = (hookCaptions && hookCaptions.length > 0)
+    ? buildCaptionDrawtext(hookCaptions, hookSegmentStart ?? 0)
+    : "";
+
+  const stackFilter = captionFilter
+    ? `[broll][head]vstack=inputs=2,${captionFilter}[stacked]`
+    : `[broll][head]vstack=inputs=2[stacked]`;
 
   let bannerFilter: string;
   if (localBannerPath && bannerIdx >= 0) {

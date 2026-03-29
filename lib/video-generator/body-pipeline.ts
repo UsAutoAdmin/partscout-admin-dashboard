@@ -8,6 +8,7 @@ import {
   LUT_PATH,
   COLOR_GRADE_FILTER,
 } from "./constants";
+import { buildCaptionDrawtext, CaptionChunk } from "./captions";
 
 const exec = promisify(execFile);
 
@@ -53,7 +54,9 @@ async function hasAudioStream(filePath: string): Promise<boolean> {
 export async function composeBody(
   bodyVideoPath: string,
   overlays: OverlayEntry[],
-  outputPath: string
+  outputPath: string,
+  bodyCaptions?: CaptionChunk[],
+  bodySegmentStart?: number
 ): Promise<void> {
   const [bodyHasAudio, bodyDuration] = await Promise.all([
     hasAudioStream(bodyVideoPath),
@@ -124,9 +127,19 @@ export async function composeBody(
     currentTop = nextTop;
   }
 
-  filterParts.push(
-    `[${currentTop}][body_bottom]vstack=inputs=2[vout]`
-  );
+  const captionFilter = (bodyCaptions && bodyCaptions.length > 0)
+    ? buildCaptionDrawtext(bodyCaptions, bodySegmentStart ?? 0)
+    : "";
+
+  if (captionFilter) {
+    filterParts.push(
+      `[${currentTop}][body_bottom]vstack=inputs=2,${captionFilter}[vout]`
+    );
+  } else {
+    filterParts.push(
+      `[${currentTop}][body_bottom]vstack=inputs=2[vout]`
+    );
+  }
 
   if (bodyHasAudio) {
     filterParts.push(

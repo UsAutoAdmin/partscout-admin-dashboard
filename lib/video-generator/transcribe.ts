@@ -11,6 +11,7 @@ export interface TranscriptWord {
   word: string;
   start: number;
   end: number;
+  probability?: number;
 }
 
 export interface TranscriptResult {

@@ -79,6 +79,12 @@ type WorkflowPhase =
 
 type ProcessingMode = "manual" | "auto";
 
+interface HookFlag {
+  index: number;
+  flagged: boolean;
+  reason?: string;
+}
+
 interface AutoJobStatus {
   id: string;
   phase: string;
@@ -90,6 +96,7 @@ interface AutoJobStatus {
   error?: string;
   createdAt: number;
   completedAt?: number;
+  hookFlags?: HookFlag[];
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -1625,6 +1632,9 @@ export default function VideoGenerator() {
   const [hookTextsLoading, setHookTextsLoading] = useState(false);
   const [pendingOverlaySlots, setPendingOverlaySlots] = useState<OverlaySlot[]>([]);
   const [autoJobs, setAutoJobs] = useState<AutoJobStatus[]>([]);
+  const [previewVideo, setPreviewVideo] = useState<{ jobId: string; file: string } | null>(null);
+  const [previewSpeed, setPreviewSpeed] = useState<1 | 2>(1);
+  const previewRef = useRef<HTMLVideoElement>(null);
   const [bulkFiles, setBulkFiles] = useState<File[]>([]);
   const [bulkUploading, setBulkUploading] = useState(false);
   const [scriptEntries, setScriptEntries] = useState<{ year?: string; make: string; model: string; part: string }[]>([]);
@@ -1684,6 +1694,51 @@ export default function VideoGenerator() {
     setBulkUploading(false);
     setBulkFiles([]);
     startAutoJobPolling();
+  }
+
+  async function handleEditManually(autoJobId: string) {
+    try {
+      const res = await fetch(`/api/video-generator/auto-job-data/${autoJobId}`);
+      if (!res.ok) throw new Error("Failed to load job data");
+      const data = await res.json();
+
+      setMode("manual");
+      setJobId(autoJobId);
+
+      if (data.segments) setSegments(data.segments);
+      if (data.transcript) setTranscript(data.transcript);
+      if (data.overlayDetection) setOverlayDetection(data.overlayDetection);
+      if (data.hookTexts) setHookTexts(data.hookTexts);
+
+      if (data.overlayDetection) {
+        const slots: OverlaySlot[] = [
+          { key: "part", label: "Part Picture", detection: data.overlayDetection.part, file: null, uploadedFilename: null },
+          { key: "car", label: "Car Picture", detection: data.overlayDetection.car, file: null, uploadedFilename: null },
+          { key: "price", label: "Price Card", detection: data.overlayDetection.price, file: null, uploadedFilename: null },
+          { key: "soldPrice", label: "eBay Sold Listing", detection: data.overlayDetection.soldPrice, file: null, uploadedFilename: null },
+        ];
+        if (data.overlaySlots) {
+          for (const os of data.overlaySlots) {
+            const match = slots.find((s) => s.key === os.slot);
+            if (match) match.uploadedFilename = os.filename;
+          }
+        }
+        setPendingOverlaySlots(slots);
+      }
+
+      setPhase("segments");
+    } catch (err: any) {
+      console.error("Failed to load auto job for manual editing:", err);
+    }
+  }
+
+  function togglePreview(jobIdVal: string, file: string) {
+    if (previewVideo?.jobId === jobIdVal && previewVideo?.file === file) {
+      setPreviewVideo(null);
+    } else {
+      setPreviewVideo({ jobId: jobIdVal, file });
+      setPreviewSpeed(1);
+    }
   }
 
   async function loadBroll() {
@@ -1906,7 +1961,13 @@ export default function VideoGenerator() {
       const res = await fetch("/api/video-generator/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ jobId, overlays, hookTexts: texts || hookTexts }),
+        body: JSON.stringify({
+          jobId,
+          overlays,
+          hookTexts: texts || hookTexts,
+          transcript: transcript.length > 0 ? transcript : undefined,
+          segments: segments.length > 0 ? segments : undefined,
+        }),
       });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -2067,92 +2128,175 @@ export default function VideoGenerator() {
                   </p>
                 </div>
                 <div className="divide-y divide-gray-100 dark:divide-gray-800">
-                  {autoJobs.map((aj) => (
-                    <div
-                      key={aj.id}
-                      className="px-5 py-3 flex items-center justify-between gap-4"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          {aj.phase === "done" ? (
-                            <div className="h-2.5 w-2.5 rounded-full bg-success-500 flex-shrink-0" />
-                          ) : aj.phase === "error" ? (
-                            <div className="h-2.5 w-2.5 rounded-full bg-error-500 flex-shrink-0" />
-                          ) : (
-                            <div className="h-2.5 w-2.5 rounded-full bg-brand-500 animate-pulse flex-shrink-0" />
-                          )}
-                          <p className="text-sm font-medium text-gray-800 dark:text-white/90 truncate">
-                            {aj.videoName || aj.id.slice(0, 8)}
-                          </p>
-                          <span
-                            className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                              aj.phase === "done"
-                                ? "bg-success-50 dark:bg-success-500/10 text-success-600 dark:text-success-400"
-                                : aj.phase === "error"
-                                ? "bg-error-50 dark:bg-error-500/10 text-error-600 dark:text-error-400"
-                                : "bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400"
-                            }`}
-                          >
-                            {aj.phase.replace(/_/g, " ")}
-                          </span>
+                  {autoJobs.map((aj) => {
+                    const flaggedIndices = new Set(
+                      (aj.hookFlags ?? []).filter((f) => f.flagged).map((f) => f.index)
+                    );
+
+                    return (
+                      <div key={aj.id} className="px-5 py-3">
+                        <div className="flex items-center justify-between gap-4">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              {aj.phase === "done" ? (
+                                <div className="h-2.5 w-2.5 rounded-full bg-success-500 flex-shrink-0" />
+                              ) : aj.phase === "error" ? (
+                                <div className="h-2.5 w-2.5 rounded-full bg-error-500 flex-shrink-0" />
+                              ) : (
+                                <div className="h-2.5 w-2.5 rounded-full bg-brand-500 animate-pulse flex-shrink-0" />
+                              )}
+                              <p className="text-sm font-medium text-gray-800 dark:text-white/90 truncate">
+                                {aj.videoName || aj.id.slice(0, 8)}
+                              </p>
+                              <span
+                                className={`text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                                  aj.phase === "done"
+                                    ? "bg-success-50 dark:bg-success-500/10 text-success-600 dark:text-success-400"
+                                    : aj.phase === "error"
+                                    ? "bg-error-50 dark:bg-error-500/10 text-error-600 dark:text-error-400"
+                                    : "bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400"
+                                }`}
+                              >
+                                {aj.phase.replace(/_/g, " ")}
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
+                              {aj.error || aj.progress}
+                            </p>
+                            {aj.phase === "generating_hooks" && aj.totalHooks > 0 && (
+                              <div className="mt-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
+                                <div
+                                  className="bg-brand-500 h-1.5 rounded-full transition-all"
+                                  style={{
+                                    width: `${Math.round(
+                                      (aj.currentHook / aj.totalHooks) * 100
+                                    )}%`,
+                                  }}
+                                />
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {aj.phase === "done" && aj.outputFiles.length > 0 && (
+                              <>
+                                {aj.outputFiles.map((f, fIdx) => {
+                                  const isFlagged = flaggedIndices.has(fIdx);
+                                  const flagReason = (aj.hookFlags ?? []).find((fl) => fl.index === fIdx)?.reason;
+
+                                  return (
+                                    <div key={f} className="relative inline-flex items-center gap-0.5">
+                                      <button
+                                        onClick={() => togglePreview(aj.id, f)}
+                                        className={`inline-flex rounded-l-lg px-2 py-1.5 text-[11px] font-medium transition-colors ${
+                                          previewVideo?.jobId === aj.id && previewVideo?.file === f
+                                            ? "bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300"
+                                            : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                                        }`}
+                                        title="Preview"
+                                      >
+                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                      </button>
+                                      <a
+                                        href={`/api/video-generator/download/${aj.id}/${encodeURIComponent(f)}`}
+                                        className="inline-flex rounded-r-lg bg-gray-100 dark:bg-gray-800 px-2 py-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                                        download
+                                      >
+                                        {f.replace(/\.mp4$/, "")}
+                                      </a>
+                                      {isFlagged && (
+                                        <span
+                                          className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-orange-400 text-white text-[8px] cursor-help"
+                                          title={flagReason || "Possible stumble detected"}
+                                        >
+                                          <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M14.4 6H20v12.6L14.4 6zM4 4h10l7 14H4V4z" />
+                                          </svg>
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                                <a
+                                  href={`/api/video-generator/download-all/${aj.id}`}
+                                  className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-success-500 hover:bg-success-50 dark:hover:bg-success-500/10 transition-colors"
+                                  title={`Download all (${aj.outputFiles.length} videos)`}
+                                  download
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                  </svg>
+                                </a>
+                              </>
+                            )}
+                            {(aj.phase === "done" || aj.phase === "error") && (
+                              <button
+                                onClick={() => handleEditManually(aj.id)}
+                                className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-500/10 transition-colors"
+                                title="Edit Manually"
+                              >
+                                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                            )}
+                            <button
+                              onClick={async () => {
+                                if (!confirm("Delete this job and all its files?")) return;
+                                await fetch(`/api/video-generator/auto-process?jobId=${aj.id}`, { method: "DELETE" });
+                                setAutoJobs((prev) => prev.filter((j) => j.id !== aj.id));
+                              }}
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-error-500 hover:bg-error-50 dark:hover:bg-error-500/10 transition-colors"
+                              title="Delete job"
+                            >
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
+                            </button>
+                          </div>
                         </div>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">
-                          {aj.error || aj.progress}
-                        </p>
-                        {aj.phase === "generating_hooks" && aj.totalHooks > 0 && (
-                          <div className="mt-1.5 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">
-                            <div
-                              className="bg-brand-500 h-1.5 rounded-full transition-all"
-                              style={{
-                                width: `${Math.round(
-                                  (aj.currentHook / aj.totalHooks) * 100
-                                )}%`,
+
+                        {/* Inline Preview Player */}
+                        {previewVideo?.jobId === aj.id && aj.outputFiles.includes(previewVideo.file) && (
+                          <div className="mt-3 rounded-lg overflow-hidden bg-black relative">
+                            <video
+                              ref={previewRef}
+                              key={`${aj.id}-${previewVideo.file}`}
+                              src={`/api/video-generator/download/${aj.id}/${encodeURIComponent(previewVideo.file)}?preview=1`}
+                              controls
+                              autoPlay
+                              className="w-full max-h-[480px]"
+                              onLoadedMetadata={() => {
+                                if (previewRef.current) {
+                                  previewRef.current.playbackRate = previewSpeed;
+                                }
                               }}
                             />
+                            <div className="absolute top-2 right-2 flex gap-1">
+                              <button
+                                onClick={() => {
+                                  const newSpeed = previewSpeed === 1 ? 2 : 1;
+                                  setPreviewSpeed(newSpeed);
+                                  if (previewRef.current) previewRef.current.playbackRate = newSpeed;
+                                }}
+                                className="px-2 py-1 text-[10px] font-bold rounded bg-black/70 text-white hover:bg-black/90 transition-colors"
+                              >
+                                {previewSpeed}x
+                              </button>
+                              <button
+                                onClick={() => setPreviewVideo(null)}
+                                className="px-2 py-1 text-[10px] font-bold rounded bg-black/70 text-white hover:bg-black/90 transition-colors"
+                              >
+                                Close
+                              </button>
+                            </div>
                           </div>
                         )}
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        {aj.phase === "done" && aj.outputFiles.length > 0 && (
-                          <>
-                            {aj.outputFiles.map((f) => (
-                              <a
-                                key={f}
-                                href={`/api/video-generator/download/${aj.id}/${encodeURIComponent(f)}`}
-                                className="inline-flex rounded-lg bg-gray-100 dark:bg-gray-800 px-2.5 py-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                                download
-                              >
-                                {f.replace(/\.mp4$/, "")}
-                              </a>
-                            ))}
-                            <a
-                              href={`/api/video-generator/download-all/${aj.id}`}
-                              className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-success-500 hover:bg-success-50 dark:hover:bg-success-500/10 transition-colors"
-                              title={`Download all (${aj.outputFiles.length} videos)`}
-                              download
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                              </svg>
-                            </a>
-                          </>
-                        )}
-                        <button
-                          onClick={async () => {
-                            if (!confirm("Delete this job and all its files?")) return;
-                            await fetch(`/api/video-generator/auto-process?jobId=${aj.id}`, { method: "DELETE" });
-                            setAutoJobs((prev) => prev.filter((j) => j.id !== aj.id));
-                          }}
-                          className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-error-500 hover:bg-error-50 dark:hover:bg-error-500/10 transition-colors"
-                          title="Delete job"
-                        >
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
