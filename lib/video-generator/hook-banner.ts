@@ -8,10 +8,10 @@ const MONTSERRAT_PATH = path.join(ASSETS_DIR, "fonts", "Montserrat-ExtraBold.ttf
 const BG_COLOR = "#1C4629";
 const TEXT_COLOR = "#FFFFFF";
 const BANNER_RADIUS = 18;
-const FONT_SIZE = 52;
-const PAD_X = 40;
-const PAD_Y = 14;
-const CHAR_WIDTH_EST = 30;
+const FONT_SIZE = 72;
+const PAD_X = 50;
+const PAD_Y = 20;
+const CHAR_WIDTH_EST = 42;
 
 let _fontBase64Cache: string | null = null;
 async function loadFontBase64(): Promise<string> {

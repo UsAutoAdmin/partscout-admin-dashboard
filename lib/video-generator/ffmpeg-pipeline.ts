@@ -105,9 +105,8 @@ export async function processHookWithBody(
   const lutFilter = useLut ? `,lut3d='${LUT_PATH}'` : "";
 
   const gradeFilter = `,${COLOR_GRADE_FILTER}`;
-  const exactSize = `,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}`;
-  const brollFilter = `[0:v]setsar=1,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase:force_divisible_by=2,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}:(iw-${VIDEO_WIDTH})/2:(ih-${HALF_HEIGHT})/2${lutFilter}${gradeFilter}${exactSize},setpts=PTS-STARTPTS,format=yuv420p[broll]`;
-  const headFilter = `[1:v]setsar=1,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase:force_divisible_by=2,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}:(iw-${VIDEO_WIDTH})/2:(ih-${HALF_HEIGHT})/2${lutFilter}${gradeFilter}${exactSize},format=yuv420p[head]`;
+  const brollFilter = `[0:v]setsar=1,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}${lutFilter}${gradeFilter},scale=${VIDEO_WIDTH}:${HALF_HEIGHT},pad=${VIDEO_WIDTH}:${HALF_HEIGHT}:-1:-1:black,setpts=PTS-STARTPTS,format=yuv420p[broll]`;
+  const headFilter = `[1:v]setsar=1,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}${lutFilter}${gradeFilter},scale=${VIDEO_WIDTH}:${HALF_HEIGHT},pad=${VIDEO_WIDTH}:${HALF_HEIGHT}:-1:-1:black,format=yuv420p[head]`;
   const captionFilter = (hookCaptions && hookCaptions.length > 0)
     ? buildCaptionDrawtext(hookCaptions, hookSegmentStart ?? 0)
     : "";

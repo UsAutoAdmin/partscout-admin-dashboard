@@ -11,14 +11,16 @@ import {
   VIDEO_HEIGHT,
   HALF_HEIGHT,
   COLOR_GRADE_FILTER,
+  REMOTE_FFMPEG_BIN,
+  REMOTE_FFPROBE_BIN,
 } from "./constants";
 import { generateBannerImage } from "./hook-banner";
 import { buildCaptionDrawtext, CaptionChunk } from "./captions";
 
 const execAsync = promisify(execCb);
 const SSH_USER = "chaseeriksson";
-const REMOTE_FFMPEG = "~/bin/ffmpeg";
-const REMOTE_FFPROBE = "~/bin/ffprobe";
+const REMOTE_FFMPEG = REMOTE_FFMPEG_BIN;
+const REMOTE_FFPROBE = REMOTE_FFPROBE_BIN;
 const SSH_OPTS = "-o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no";
 
 export interface RemoteWorker {
@@ -167,9 +169,8 @@ export async function processHookWithBodyRemote(
   }
 
   const gradeFilter = `,${COLOR_GRADE_FILTER}`;
-  const exactSize = `,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}`;
-  const brollFilter = `[0:v]setsar=1,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase:force_divisible_by=2,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}:(iw-${VIDEO_WIDTH})/2:(ih-${HALF_HEIGHT})/2${lutFilter}${gradeFilter}${exactSize},setpts=PTS-STARTPTS,format=yuv420p[broll]`;
-  const headFilter = `[1:v]setsar=1,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase:force_divisible_by=2,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}:(iw-${VIDEO_WIDTH})/2:(ih-${HALF_HEIGHT})/2${lutFilter}${gradeFilter}${exactSize},format=yuv420p[head]`;
+  const brollFilter = `[0:v]setsar=1,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}${lutFilter}${gradeFilter},scale=${VIDEO_WIDTH}:${HALF_HEIGHT},pad=${VIDEO_WIDTH}:${HALF_HEIGHT}:-1:-1:black,setpts=PTS-STARTPTS,format=yuv420p[broll]`;
+  const headFilter = `[1:v]setsar=1,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}${lutFilter}${gradeFilter},scale=${VIDEO_WIDTH}:${HALF_HEIGHT},pad=${VIDEO_WIDTH}:${HALF_HEIGHT}:-1:-1:black,format=yuv420p[head]`;
   const captionFilter = (hookCaptions && hookCaptions.length > 0)
     ? buildCaptionDrawtext(hookCaptions, hookSegmentStart ?? 0)
     : "";

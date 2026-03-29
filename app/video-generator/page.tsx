@@ -2125,6 +2125,9 @@ export default function VideoGenerator() {
                   </h3>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                     {autoJobs.filter((j) => j.phase === "done").length}/{autoJobs.length} complete
+                    {autoJobs.filter((j) => j.phase === "queued").length > 0 && (
+                      <> &middot; {autoJobs.filter((j) => j.phase === "queued").length} queued</>
+                    )}
                   </p>
                 </div>
                 <div className="divide-y divide-gray-100 dark:divide-gray-800">
@@ -2142,6 +2145,8 @@ export default function VideoGenerator() {
                                 <div className="h-2.5 w-2.5 rounded-full bg-success-500 flex-shrink-0" />
                               ) : aj.phase === "error" ? (
                                 <div className="h-2.5 w-2.5 rounded-full bg-error-500 flex-shrink-0" />
+                              ) : aj.phase === "queued" ? (
+                                <div className="h-2.5 w-2.5 rounded-full bg-gray-400 dark:bg-gray-500 flex-shrink-0" />
                               ) : (
                                 <div className="h-2.5 w-2.5 rounded-full bg-brand-500 animate-pulse flex-shrink-0" />
                               )}
@@ -2154,6 +2159,8 @@ export default function VideoGenerator() {
                                     ? "bg-success-50 dark:bg-success-500/10 text-success-600 dark:text-success-400"
                                     : aj.phase === "error"
                                     ? "bg-error-50 dark:bg-error-500/10 text-error-600 dark:text-error-400"
+                                    : aj.phase === "queued"
+                                    ? "bg-gray-100 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400"
                                     : "bg-brand-50 dark:bg-brand-500/10 text-brand-600 dark:text-brand-400"
                                 }`}
                               >

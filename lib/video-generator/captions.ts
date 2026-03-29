@@ -12,8 +12,8 @@ export interface CaptionChunk {
 const MONTSERRAT_PATH = path.join(ASSETS_DIR, "fonts", "Montserrat-ExtraBold.ttf");
 const CAPTION_COLOR = "0x1C4629";
 const BORDER_COLOR = "white";
-const FONT_SIZE = 52;
-const BORDER_WIDTH = 3;
+const FONT_SIZE = 64;
+const BORDER_WIDTH = 4;
 const Y_POSITION = "h*0.78";
 
 /**
@@ -49,13 +49,35 @@ export async function cleanCaptions(
       text: c.text,
     }));
 
+    // Send the full transcript as context so the LLM understands what's being said
+    const fullTranscript = words.map((w) => w.word).join(" ");
+
     const response = await client.messages.create({
       model: "claude-haiku-4-5",
       max_tokens: 2048,
       messages: [
         {
           role: "user",
-          content: `Clean these video caption chunks for on-screen display. Each chunk is max 3 words shown at a time. Fix spelling errors, remove filler words (um, uh, like), capitalize properly for captions, and ensure they read naturally. Do NOT change the meaning or add words. If a chunk is just a filler word, replace it with empty string "". Return ONLY a JSON array of objects with "index" and "text" fields.\n\nChunks:\n${JSON.stringify(chunksPayload, null, 2)}`,
+          content: `You are fixing auto-generated captions for a short video about flipping auto parts from junkyards. The speech-to-text made many errors. Fix them using context.
+
+FULL TRANSCRIPT (for context): "${fullTranscript}"
+
+COMMON TRANSCRIPTION ERRORS TO FIX:
+- "pool" should be "pull" (as in pulling a part)
+- "that" when it should be "it'll" or "that'll"
+- Homophones: "their/there/they're", "your/you're", "its/it's"
+- Car part names and car makes/models should be spelled correctly
+- Dollar amounts should use "$" symbol (e.g. "eighty dollars" → "$80")
+- Numbers should be written as digits for prices
+- Remove filler words (um, uh, like) — return "" for filler-only chunks
+- Capitalize the first word of each chunk
+
+Each chunk is max 3 words displayed on screen. Keep chunks SHORT and punchy. Do NOT add extra words. Fix the text so it reads correctly and makes sense.
+
+Return ONLY a JSON array of {"index": number, "text": string}. Empty string "" for chunks to remove.
+
+Chunks:
+${JSON.stringify(chunksPayload, null, 2)}`,
         },
       ],
     });
@@ -107,9 +129,12 @@ function escapeDrawtext(text: string): string {
  */
 export function buildCaptionDrawtext(
   chunks: CaptionChunk[],
-  offsetSeconds: number = 0
+  offsetSeconds: number = 0,
+  fontPathOverride?: string
 ): string {
   if (chunks.length === 0) return "";
+
+  const fontPath = fontPathOverride || MONTSERRAT_PATH;
 
   const filters = chunks.map((chunk) => {
     const start = Math.max(0, chunk.start - offsetSeconds);
@@ -117,7 +142,7 @@ export function buildCaptionDrawtext(
     const escaped = escapeDrawtext(chunk.text);
 
     return (
-      `drawtext=fontfile='${MONTSERRAT_PATH}'` +
+      `drawtext=fontfile='${fontPath}'` +
       `:text='${escaped}'` +
       `:enable='between(t,${start.toFixed(3)},${end.toFixed(3)})'` +
       `:x=(w-text_w)/2` +

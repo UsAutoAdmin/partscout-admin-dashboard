@@ -19,15 +19,13 @@ import { findCarImage, downloadCarImage, closeBrowser as closeCarBrowser } from 
 import { buildSoldSearchUrl, scrapeEbaySoldListings, closeBrowser as closeEbayBrowser } from "./ebay-scraper";
 import { composeBody, OverlayEntry } from "./body-pipeline";
 import { processHookWithBody } from "./ffmpeg-pipeline";
-import {
-  REMOTE_WORKERS,
-  checkRemoteAvailable,
-  processHookWithBodyRemote,
-} from "./remote-ffmpeg";
 import { analyzeHookQuality } from "./stumble-detect";
 import { captionsForSegment, CaptionChunk } from "./captions";
+import { enqueueJob, registerPipelineRunner, getQueuePosition } from "./job-queue";
+import { runPipelineRemote } from "./remote-pipeline";
 
 export type AutoPhase =
+  | "queued"
   | "uploading"
   | "analyzing"
   | "splitting"
@@ -57,7 +55,6 @@ export interface AutoJobStatus {
   createdAt: number;
   completedAt?: number;
   hookFlags?: HookFlag[];
-  // Intermediate data for auto-to-manual editing bridge
   segments?: Segment[];
   transcript?: TranscriptWord[];
   overlayDetection?: OverlayDetectionResult;
@@ -89,14 +86,34 @@ function updateAutoJob(id: string, patch: Partial<AutoJobStatus>) {
   if (job) Object.assign(job, patch);
 }
 
+// Always re-register so the runner closure captures the current updateAutoJob
+registerPipelineRunner(async (rawVideoPath, jobId, worker) => {
+  updateAutoJob(jobId, { phase: "analyzing", progress: "Starting pipeline..." });
+  try {
+    if (worker.type === "remote") {
+      await runPipelineRemote(rawVideoPath, jobId, worker.host, (patch) => updateAutoJob(jobId, patch));
+    } else {
+      await runPipelineLocal(rawVideoPath, jobId);
+    }
+  } catch (err: any) {
+    updateAutoJob(jobId, {
+      phase: "error",
+      error: err.message,
+      completedAt: Date.now(),
+    });
+  }
+});
+
 export async function startAutoPipeline(
   rawVideoPath: string,
   jobId: string
 ): Promise<AutoJobStatus> {
+  const position = enqueueJob(rawVideoPath, jobId);
+
   const job: AutoJobStatus = {
     id: jobId,
-    phase: "analyzing",
-    progress: "Analyzing audio & transcribing...",
+    phase: "queued",
+    progress: position === 1 ? "Starting..." : `Queued (${position} in line)`,
     currentHook: 0,
     totalHooks: 0,
     outputFiles: [],
@@ -105,18 +122,19 @@ export async function startAutoPipeline(
   };
   autoJobs.set(jobId, job);
 
-  runPipeline(rawVideoPath, jobId).catch((err) => {
-    updateAutoJob(jobId, {
-      phase: "error",
-      error: err.message,
-      completedAt: Date.now(),
-    });
-  });
-
   return job;
 }
 
-async function runPipeline(rawVideoPath: string, jobId: string) {
+/**
+ * Returns the queue position for a given job, or null if already running.
+ */
+export function getJobQueuePosition(jobId: string): number | null {
+  return getQueuePosition(jobId);
+}
+
+// ─── Local pipeline (runs entirely on Mini 1) ───────────────────────────────
+
+async function runPipelineLocal(rawVideoPath: string, jobId: string) {
   const jobDir = path.join(UPLOADS_DIR, jobId);
   const outputDir = path.join(OUTPUT_DIR, jobId);
   await fs.mkdir(outputDir, { recursive: true });
@@ -136,36 +154,28 @@ async function runPipeline(rawVideoPath: string, jobId: string) {
   ]);
 
   console.log(`[auto] Silence detection found ${silenceRanges.length} gaps, video duration: ${totalDuration.toFixed(1)}s`);
-  for (const r of silenceRanges) {
-    console.log(`[auto]   gap ${r.start.toFixed(2)}s - ${r.end.toFixed(2)}s (${r.duration.toFixed(2)}s)`);
-  }
 
   const transcriptPromise = transcribeWithTimestamps(rawAudioPath);
 
-  // ── 2. Structured segmentation: enforce 3 hooks + 1 body ──
-  const rawSegments = segmentsFromSilenceStructured(silenceRanges, totalDuration, 3);
+  // ── 2. Structured segmentation ──
+  const rawSegments = segmentsFromSilenceStructured(silenceRanges, totalDuration, 5);
 
-  console.log(`[auto] Structured segments:`);
-  for (const s of rawSegments) {
-    console.log(`[auto]   ${s.label}: ${s.start.toFixed(2)}s - ${s.end.toFixed(2)}s (${(s.end - s.start).toFixed(1)}s)`);
-  }
-
-  updateAutoJob(jobId, { progress: "Trimming segment edges..." });
-  const trimmedSegments = await trimSegmentEdges(rawVideoPath, rawSegments);
-
-  // ── 3. Await transcription to validate body label ──
-  updateAutoJob(jobId, { phase: "transcribing", progress: "Transcribing & validating body..." });
+  // ── 3. Await transcription, then trim to actual speech boundaries ──
+  updateAutoJob(jobId, { phase: "transcribing", progress: "Transcribing & trimming to speech..." });
 
   const transcriptResult = await transcriptPromise;
   const words = transcriptResult.words;
 
+  // Clean up raw audio early
+  await fs.unlink(rawAudioPath).catch(() => {});
+
+  const trimmedSegments = await trimSegmentEdges(rawVideoPath, rawSegments, 100, words);
   const segments = validateBodySegment(trimmedSegments, words);
 
   const hooks = segments.filter((s) => s.label.startsWith("Hook"));
   const bodySegment = segments.find((s) => s.label === "Body");
   if (!bodySegment) throw new Error("No body segment detected in video");
 
-  // Store intermediate data for manual editing bridge
   updateAutoJob(jobId, {
     totalHooks: hooks.length,
     progress: `Found ${hooks.length} hooks + 1 body`,
@@ -178,9 +188,7 @@ async function runPipeline(rawVideoPath: string, jobId: string) {
   for (let i = 0; i < hooks.length; i++) {
     const quality = await analyzeHookQuality(words, hooks[i].start, hooks[i].end);
     hookFlags.push({ index: i, flagged: quality.flagged, reason: quality.reason });
-    if (quality.flagged) {
-      console.log(`[auto] Hook ${i + 1} flagged: ${quality.reason}`);
-    }
+    if (quality.flagged) console.log(`[auto] Hook ${i + 1} flagged: ${quality.reason}`);
   }
   updateAutoJob(jobId, { hookFlags });
 
@@ -188,9 +196,7 @@ async function runPipeline(rawVideoPath: string, jobId: string) {
   updateAutoJob(jobId, { phase: "splitting", progress: "Extracting segments..." });
 
   for (const seg of segments) {
-    const filename = seg.label === "Body"
-      ? "body_segment.mp4"
-      : `hook_${seg.index}.mp4`;
+    const filename = seg.label === "Body" ? "body_segment.mp4" : `hook_${seg.index}.mp4`;
     await extractSegment(rawVideoPath, seg.start, seg.end, path.join(jobDir, filename));
   }
 
@@ -202,26 +208,15 @@ async function runPipeline(rawVideoPath: string, jobId: string) {
   const scriptMatch = matchScriptEntry(detection.car?.text, detection.part?.text);
   if (scriptMatch) {
     const correctedCar = [scriptMatch.year, scriptMatch.make, scriptMatch.model]
-      .filter(Boolean)
-      .join(" ");
-    if (detection.car) {
-      detection.car = { ...detection.car, text: correctedCar };
-    } else {
-      detection.car = { text: correctedCar, start: 0, end: 0 };
-    }
-    if (detection.part) {
-      detection.part = { ...detection.part, text: scriptMatch.part };
-    } else {
-      detection.part = { text: scriptMatch.part, start: 0, end: 0 };
-    }
-    console.log(`[auto] Script sheet corrected → car: "${correctedCar}", part: "${scriptMatch.part}"`);
+      .filter(Boolean).join(" ");
+    if (detection.car) detection.car = { ...detection.car, text: correctedCar };
+    else detection.car = { text: correctedCar, start: 0, end: 0 };
+    if (detection.part) detection.part = { ...detection.part, text: scriptMatch.part };
+    else detection.part = { text: scriptMatch.part, start: 0, end: 0 };
   }
 
   const videoBaseName = [detection.car?.text, detection.part?.text]
-    .filter(Boolean)
-    .join(" ")
-    .replace(/[^a-zA-Z0-9 ]/g, "")
-    .trim() || "Video";
+    .filter(Boolean).join(" ").replace(/[^a-zA-Z0-9 ]/g, "").trim() || "Video";
 
   updateAutoJob(jobId, { videoName: videoBaseName, overlayDetection: detection });
 
@@ -244,15 +239,12 @@ async function runPipeline(rawVideoPath: string, jobId: string) {
             const dest = path.join(jobDir, "auto_price.jpg");
             await downloadPriceCardImage(match.image_url, dest);
             overlayEntries.push({
-              slot: "price",
-              imagePath: dest,
+              slot: "price", imagePath: dest,
               timestamp: toBodyRelative(detection.price?.start ?? detection.part!.start),
             });
             overlaySlots.push({ slot: "price", filename: "auto_price.jpg" });
           }
-        } catch (e: any) {
-          console.log(`[auto] Price card fetch failed: ${e.message}`);
-        }
+        } catch (e: any) { console.log(`[auto] Price card fetch failed: ${e.message}`); }
       })()
     );
   }
@@ -266,17 +258,13 @@ async function runPipeline(rawVideoPath: string, jobId: string) {
             const dest = path.join(jobDir, "auto_car.jpg");
             await downloadCarImage(result.imageUrl, dest, (result as any)._candidates);
             overlayEntries.push({
-              slot: "car",
-              imagePath: dest,
+              slot: "car", imagePath: dest,
               timestamp: toBodyRelative(detection.car!.start),
             });
             overlaySlots.push({ slot: "car", filename: "auto_car.jpg" });
           }
-        } catch (e: any) {
-          console.log(`[auto] Car image fetch failed: ${e.message}`);
-        } finally {
-          await closeCarBrowser();
-        }
+        } catch (e: any) { console.log(`[auto] Car image fetch failed: ${e.message}`); }
+        finally { await closeCarBrowser(); }
       })()
     );
   }
@@ -288,51 +276,40 @@ async function runPipeline(rawVideoPath: string, jobId: string) {
           const searchUrl = buildSoldSearchUrl(detection.part!.text, detection.car!.text);
           const partDest = path.join(jobDir, "auto_part.jpg");
           const soldDest = path.join(jobDir, "auto_sold.png");
-
           let targetPrice: number | undefined;
           if (detection.soldPrice?.text) {
             const numMatch = detection.soldPrice.text.match(/\d+/);
             if (numMatch) targetPrice = parseFloat(numMatch[0]);
           }
-
           const result = await scrapeEbaySoldListings(searchUrl, partDest, soldDest, targetPrice);
           if (result.partImageSaved) {
             overlayEntries.push({
-              slot: "part",
-              imagePath: partDest,
+              slot: "part", imagePath: partDest,
               timestamp: toBodyRelative(detection.part!.start),
             });
             overlaySlots.push({ slot: "part", filename: "auto_part.jpg" });
           }
           if (result.soldScreenshotSaved && detection.soldPrice) {
             overlayEntries.push({
-              slot: "soldPrice",
-              imagePath: soldDest,
+              slot: "soldPrice", imagePath: soldDest,
               timestamp: toBodyRelative(detection.soldPrice.start),
             });
             overlaySlots.push({ slot: "soldPrice", filename: "auto_sold.png" });
           }
-        } catch (e: any) {
-          console.log(`[auto] eBay fetch failed: ${e.message}`);
-        } finally {
-          await closeEbayBrowser();
-        }
+        } catch (e: any) { console.log(`[auto] eBay fetch failed: ${e.message}`); }
+        finally { await closeEbayBrowser(); }
       })()
     );
   }
 
   await Promise.all(overlayFetches);
 
-  updateAutoJob(jobId, {
-    progress: `Got ${overlayEntries.length} overlay images`,
-    overlaySlots,
-  });
+  updateAutoJob(jobId, { progress: `Got ${overlayEntries.length} overlay images`, overlaySlots });
 
   // ── 7. Compose body with overlays + captions ──
   updateAutoJob(jobId, { phase: "composing_body", progress: "Composing body with overlays & captions..." });
 
   const bodyCaptions = await captionsForSegment(words, bodySegment.start, bodySegment.end);
-
   const bodyVideoPath = path.join(jobDir, "body_segment.mp4");
   const composedBodyPath = path.join(jobDir, "body_composed.mp4");
   await composeBody(bodyVideoPath, overlayEntries, composedBodyPath, bodyCaptions, bodySegment.start);
@@ -344,35 +321,16 @@ async function runPipeline(rawVideoPath: string, jobId: string) {
     yardPrice: detection.price?.text,
     soldPrice: detection.soldPrice?.text,
   });
-
   updateAutoJob(jobId, { hookTexts });
 
   // ── 9. Generate per-hook captions ──
   const hookCaptionSets: CaptionChunk[][] = [];
   for (const hook of hooks) {
-    const captions = await captionsForSegment(words, hook.start, hook.end);
-    hookCaptionSets.push(captions);
+    hookCaptionSets.push(await captionsForSegment(words, hook.start, hook.end));
   }
 
-  // ── 10. Process hooks (distributed across workers) ──
+  // ── 10. Process all hooks sequentially on this machine ──
   updateAutoJob(jobId, { phase: "generating_hooks", progress: "Rendering final videos..." });
-
-  const availableRemotes: string[] = [];
-  const checks = await Promise.all(
-    REMOTE_WORKERS.map(async (w) => ({
-      host: w.host,
-      ok: await checkRemoteAvailable(w.host),
-    }))
-  );
-  for (const c of checks) {
-    if (c.ok) availableRemotes.push(c.host);
-  }
-
-  type Worker = { type: "local" } | { type: "remote"; host: string };
-  const workers: Worker[] = [{ type: "local" }];
-  for (const host of availableRemotes) {
-    workers.push({ type: "remote", host });
-  }
 
   const hookFiles = (await fs.readdir(jobDir))
     .filter((f) => /^hook_\d+\.mp4$/.test(f))
@@ -382,50 +340,31 @@ async function runPipeline(rawVideoPath: string, jobId: string) {
       return ai - bi;
     });
 
-  let completed = 0;
-  const pending = hookFiles.map((file, idx) => ({ file, idx }));
+  const safeName = videoBaseName.replace(/[/\\?%*:|"<>]/g, "").trim();
   const outputFiles: string[] = [];
 
-  const safeName = videoBaseName.replace(/[/\\?%*:|"<>]/g, "").trim();
+  for (let i = 0; i < hookFiles.length; i++) {
+    const hookPath = path.join(jobDir, hookFiles[i]);
+    const outputFile = `${safeName} - ${i + 1}.mp4`;
+    const outputPath = path.join(outputDir, outputFile);
+    const hookText = hookTexts[i] || undefined;
+    const hookCaptions = hookCaptionSets[i] || undefined;
+    const hook = hooks[i];
 
-  const processNext = async (worker: Worker): Promise<void> => {
-    while (pending.length > 0) {
-      const item = pending.shift();
-      if (!item) return;
-      const { file, idx } = item;
-      const hookPath = path.join(jobDir, file);
-      const outputFile = `${safeName} - ${idx + 1}.mp4`;
-      const outputPath = path.join(outputDir, outputFile);
-      const hookText = hookTexts[idx] || undefined;
-      const hookCaptions = hookCaptionSets[idx] || undefined;
-      const hook = hooks[idx];
+    await processHookWithBody(hookPath, composedBodyPath, outputPath, hookText, hookCaptions, hook?.start);
 
-      try {
-        if (worker.type === "remote") {
-          await processHookWithBodyRemote(hookPath, composedBodyPath, outputPath, worker.host, hookText, hookCaptions, hook?.start);
-        } else {
-          await processHookWithBody(hookPath, composedBodyPath, outputPath, hookText, hookCaptions, hook?.start);
-        }
-      } catch (err: any) {
-        if (worker.type === "remote") {
-          await processHookWithBody(hookPath, composedBodyPath, outputPath, hookText, hookCaptions, hook?.start);
-        } else {
-          throw err;
-        }
-      }
+    outputFiles.push(outputFile);
+    updateAutoJob(jobId, {
+      currentHook: i + 1,
+      progress: `Rendered ${i + 1}/${hookFiles.length} videos`,
+    });
+  }
 
-      outputFiles.push(outputFile);
-      completed++;
-      updateAutoJob(jobId, {
-        currentHook: completed,
-        progress: `Rendered ${completed}/${hookFiles.length} videos`,
-      });
-    }
-  };
-
-  await Promise.all(workers.map((w) => processNext(w)));
-
-  await fs.unlink(rawAudioPath).catch(() => {});
+  // ── 11. Cleanup intermediate files ──
+  for (const hf of hookFiles) {
+    await fs.unlink(path.join(jobDir, hf)).catch(() => {});
+  }
+  await fs.unlink(path.join(jobDir, "body_segment.mp4")).catch(() => {});
 
   updateAutoJob(jobId, {
     phase: "done",

@@ -23,7 +23,7 @@ export interface Segment {
 export async function detectSilence(
   filePath: string,
   noiseDb = -30,
-  minDuration = 0.8
+  minDuration = 0.5
 ): Promise<SilenceRange[]> {
   const { stderr } = await exec("ffmpeg", [
     "-vn",
@@ -121,106 +121,171 @@ export function segmentsFromSilence(
 export function segmentsFromSilenceStructured(
   silenceRanges: SilenceRange[],
   totalDuration: number,
-  numHooks = 3
+  numHooks = 5
 ): Segment[] {
-  const totalSegments = numHooks + 1;
+  const MIN_HOOK_DURATION = 1.0;
+  const neededGaps = numHooks; // 5 gaps → 5 hooks + 1 body
 
   if (silenceRanges.length === 0) {
     return [{ index: 0, start: 0, end: totalDuration, label: "Body" }];
   }
 
-  if (silenceRanges.length < totalSegments - 1) {
-    // Not enough gaps to form the expected structure — fall back to flexible
+  // Determine content boundaries (strip leading/trailing silence)
+  const leadingSilence = silenceRanges.find((r) => r.start <= 0.1);
+  const contentStart = leadingSilence ? leadingSilence.end : 0;
+
+  const trailingSilence = [...silenceRanges].reverse().find(
+    (r) => r.end >= totalDuration - 0.1
+  );
+  const contentEnd = trailingSilence ? trailingSilence.start : totalDuration;
+
+  // Candidate gaps: only those fully within content region
+  const candidateGaps = silenceRanges.filter(
+    (r) => r.start >= contentStart - 0.05 && r.end <= contentEnd + 0.05
+  );
+
+  if (candidateGaps.length < neededGaps) {
     return segmentsFromSilence(silenceRanges, totalDuration);
   }
 
-  // Pick the top N-1 longest gaps (these are the deliberate pauses)
-  const ranked = silenceRanges
-    .map((r, i) => ({ ...r, originalIdx: i }))
-    .sort((a, b) => b.duration - a.duration);
+  // Rank gaps longest-first for iterative selection
+  const ranked = [...candidateGaps].sort((a, b) => b.duration - a.duration);
 
-  const splitGaps = ranked
-    .slice(0, totalSegments - 1)
-    .sort((a, b) => a.start - b.start);
+  // Iteratively select gaps: pick top N, check all hooks are >= MIN_HOOK_DURATION.
+  // If any hook is too short, that gap produced a dead-zone split — swap it out
+  // for the next candidate and retry.
+  const excluded = new Set<number>();
 
-  const segments: Segment[] = [];
-  let cursor = 0;
+  for (let attempt = 0; attempt < ranked.length; attempt++) {
+    const selected: SilenceRange[] = [];
+    for (const gap of ranked) {
+      if (excluded.has(ranked.indexOf(gap))) continue;
+      selected.push(gap);
+      if (selected.length === neededGaps) break;
+    }
 
-  for (let i = 0; i < splitGaps.length; i++) {
-    const gap = splitGaps[i];
-    segments.push({
-      index: i,
+    if (selected.length < neededGaps) break;
+
+    const sortedGaps = [...selected].sort((a, b) => a.start - b.start);
+
+    // Build trial segments
+    const trial: Segment[] = [];
+    let cursor = contentStart;
+    for (const gap of sortedGaps) {
+      trial.push({
+        index: trial.length,
+        start: cursor,
+        end: gap.start,
+        label: `Hook ${trial.length + 1}`,
+      });
+      cursor = gap.end;
+    }
+    trial.push({
+      index: trial.length,
       start: cursor,
-      end: gap.start,
-      label: `Hook ${i + 1}`,
+      end: contentEnd,
+      label: "Body",
     });
-    cursor = gap.end;
+
+    // Check if any hook is too short
+    const badHook = trial.find(
+      (s) => s.label.startsWith("Hook") && (s.end - s.start) < MIN_HOOK_DURATION
+    );
+
+    if (!badHook) {
+      // All hooks are valid — re-index and return
+      for (let i = 0; i < trial.length; i++) trial[i].index = i;
+      return trial;
+    }
+
+    // Find which gap produced the bad hook and exclude it
+    const badIdx = trial.indexOf(badHook);
+    if (badIdx < sortedGaps.length) {
+      const badGap = sortedGaps[badIdx];
+      excluded.add(ranked.indexOf(badGap));
+    } else {
+      break;
+    }
   }
 
-  // Last segment is always the body
-  segments.push({
-    index: splitGaps.length,
-    start: cursor,
-    end: totalDuration,
-    label: "Body",
-  });
+  // Fallback if no valid combination found
+  return segmentsFromSilence(silenceRanges, totalDuration);
+}
 
-  return segments;
+interface WordTimestamp {
+  word: string;
+  start: number;
+  end: number;
 }
 
 /**
- * Trim segment edges closer to actual speech onset by re-running silence
- * detection with a higher threshold at each boundary. Falls back to
- * trimming a fixed 150ms from each edge.
+ * Trim segment edges to actual speech boundaries using transcript words.
+ * Falls back to audio-based detection if no words are provided.
+ *
+ * Trims start → first word's start (with a small pad for natural breath).
+ * Trims end → last word's end (cuts off post-speech noise like sniffles).
  */
 export async function trimSegmentEdges(
   filePath: string,
   segments: Segment[],
-  trimMs = 150
+  trimMs = 100,
+  words?: WordTimestamp[]
 ): Promise<Segment[]> {
+  const PAD_BEFORE = 0.08;
+  const PAD_AFTER = 0.15;
   const trimmed: Segment[] = [];
 
   for (const seg of segments) {
     let newStart = seg.start;
     let newEnd = seg.end;
 
-    // Body gets a longer probe window and higher threshold to cut deeper
-    const isBody = seg.label === "Body";
-    const startProbeWindow = isBody ? 1.0 : 0.6;
-    const noiseThreshold = isBody ? "-16dB" : "-20dB";
-    const fallbackTrimMs = isBody ? 300 : trimMs;
+    // Try transcript-based trimming first
+    if (words && words.length > 0) {
+      const segWords = words.filter(
+        (w) => w.start >= seg.start - 0.1 && w.end <= seg.end + 0.1
+      );
 
-    // Trim the start: probe for the first loud sound
-    try {
-      const probeStart = seg.start;
-      const probeLen = Math.min(startProbeWindow, (seg.end - seg.start) / 2);
+      if (segWords.length > 0) {
+        newStart = segWords[0].start - PAD_BEFORE;
+        newEnd = segWords[segWords.length - 1].end + PAD_AFTER;
+      }
+    } else {
+      // Fallback: audio-based probe
+      const isBody = seg.label === "Body";
+      const startProbeWindow = isBody ? 1.0 : 0.6;
+      const noiseThreshold = isBody ? "-16dB" : "-20dB";
+      const fallbackTrimMs = isBody ? 200 : trimMs;
 
-      const { stderr } = await exec("ffmpeg", [
-        "-vn",
-        "-ss", probeStart.toFixed(3),
-        "-t", probeLen.toFixed(3),
-        "-i", filePath,
-        "-af", `silencedetect=noise=${noiseThreshold}:d=0.05`,
-        "-f", "null",
-        "-",
-      ], { maxBuffer: 5 * 1024 * 1024 });
+      try {
+        const probeStart = seg.start;
+        const probeLen = Math.min(startProbeWindow, (seg.end - seg.start) / 2);
 
-      const endMatch = /silence_end:\s*([\d.]+)/.exec(stderr);
-      if (endMatch) {
-        const offset = parseFloat(endMatch[1]);
-        newStart = probeStart + offset;
-      } else {
+        const { stderr } = await exec("ffmpeg", [
+          "-vn",
+          "-ss", probeStart.toFixed(3),
+          "-t", probeLen.toFixed(3),
+          "-i", filePath,
+          "-af", `silencedetect=noise=${noiseThreshold}:d=0.05`,
+          "-f", "null",
+          "-",
+        ], { maxBuffer: 5 * 1024 * 1024 });
+
+        const endMatch = /silence_end:\s*([\d.]+)/.exec(stderr);
+        if (endMatch) {
+          newStart = probeStart + parseFloat(endMatch[1]);
+        } else {
+          newStart = seg.start + fallbackTrimMs / 1000;
+        }
+      } catch {
         newStart = seg.start + fallbackTrimMs / 1000;
       }
-    } catch {
-      newStart = seg.start + fallbackTrimMs / 1000;
     }
 
-    // Don't trim segment ends — the silence detection already places
-    // segment boundaries at silence_start (where speech stops), so
-    // trimming further would clip actual speech.
+    // Clamp to original boundaries
+    newStart = Math.max(seg.start, newStart);
+    newEnd = Math.min(seg.end, newEnd);
 
-    // Safety: don't let trimming invert or shrink below 0.5s
+    // Safety: don't let trimming shrink below 0.5s
     if (newEnd - newStart < 0.5) {
       newStart = seg.start;
       newEnd = seg.end;

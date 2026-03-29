@@ -28,6 +28,18 @@ export const OVERLAY_HOLD_SECONDS = 3;
 
 export const HOOKS_PER_BATCH = 5;
 
+export const REMOTE_HOME = "/Users/chaseeriksson";
+export const REMOTE_ASSET_BASE = `${REMOTE_HOME}/vgen-assets`;
+export const REMOTE_PYTHON_BIN = `${REMOTE_HOME}/vgen-venv/bin/python3`;
+export const REMOTE_FFMPEG_BIN = `${REMOTE_HOME}/bin/ffmpeg`;
+export const REMOTE_FFPROBE_BIN = `${REMOTE_HOME}/bin/ffprobe`;
+export const REMOTE_FONT_PATH = `${REMOTE_ASSET_BASE}/fonts/Montserrat-ExtraBold.ttf`;
+export const REMOTE_LUT_PATH = `${REMOTE_ASSET_BASE}/grade.cube`;
+export const REMOTE_RISER_PATH = `${REMOTE_ASSET_BASE}/riser.mp3`;
+export const REMOTE_CLICK_PATH = `${REMOTE_ASSET_BASE}/click.mp3`;
+export const REMOTE_BROLL_DIR = `${REMOTE_ASSET_BASE}/broll`;
+export const REMOTE_TRANSCRIBE_SCRIPT = `${REMOTE_ASSET_BASE}/transcribe-timestamps.py`;
+
 /**
  * Color grading applied to all raw footage (B-roll, talking head, body).
  * Approximates CapCut exposure +20 and shadows +5.
