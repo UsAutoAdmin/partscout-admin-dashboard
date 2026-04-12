@@ -109,13 +109,17 @@ ${JSON.stringify(chunksPayload, null, 2)}`,
 }
 
 /**
- * Escape special characters for FFmpeg drawtext filter.
+ * Escape special characters for FFmpeg drawtext filter text inside single quotes.
+ * Only FFmpeg-level escaping — no shell escaping here.
+ *
+ *   '\'' in FFmpeg: close-quote + escaped-literal-quote + open-quote
+ *   %% in FFmpeg drawtext: literal %
+ *   \\ inside single quotes is literal in FFmpeg, but we escape for safety
  */
 function escapeDrawtext(text: string): string {
   return text
     .replace(/\\/g, "\\\\")
-    .replace(/'/g, "'\\\\\\''")
-    .replace(/:/g, "\\:")
+    .replace(/'/g, "'\\'\\''")
     .replace(/%/g, "%%");
 }
 

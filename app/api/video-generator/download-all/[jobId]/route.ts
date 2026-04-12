@@ -22,9 +22,23 @@ export async function GET(
     return NextResponse.json({ error: "No output files found" }, { status: 404 });
   }
 
-  const files = (await fs.readdir(outputDir)).filter((f) => f.endsWith(".mp4"));
-  if (files.length === 0) {
+  const allFiles = (await fs.readdir(outputDir)).filter((f) => f.endsWith(".mp4"));
+  if (allFiles.length === 0) {
     return NextResponse.json({ error: "No video files found" }, { status: 404 });
+  }
+
+  const flaggedIndices = new Set(
+    (job?.hookFlags ?? []).filter((f) => f.flagged).map((f) => f.index + 1)
+  );
+  const files = flaggedIndices.size > 0
+    ? allFiles.filter((f) => {
+        const numMatch = f.match(/ - (\d+)\.mp4$/);
+        return !numMatch || !flaggedIndices.has(parseInt(numMatch[1]));
+      })
+    : allFiles;
+
+  if (files.length === 0) {
+    return NextResponse.json({ error: "All videos are flagged" }, { status: 404 });
   }
 
   const zipName = job?.videoName

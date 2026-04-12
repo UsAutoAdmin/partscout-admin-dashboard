@@ -12,6 +12,7 @@ export interface QueueEntry {
   jobId: string;
   rawVideoPath: string;
   position: number;
+  localOnly?: boolean;
 }
 
 const WORKERS: WorkerSlot[] = [
@@ -56,9 +57,13 @@ function getRunner(): PipelineRunner | null {
   return runnerStore[RUNNER_KEY];
 }
 
-export function enqueueJob(rawVideoPath: string, jobId: string): number {
+export function enqueueJob(
+  rawVideoPath: string,
+  jobId: string,
+  opts?: { localOnly?: boolean }
+): number {
   const position = state.pending.length + state.active.size + 1;
-  state.pending.push({ jobId, rawVideoPath, position });
+  state.pending.push({ jobId, rawVideoPath, position, localOnly: opts?.localOnly });
   updatePositions();
   drain();
   return position;
@@ -83,45 +88,54 @@ function updatePositions(): void {
   }
 }
 
-function findFreeWorkerIndex(): number {
+function findFreeWorkerIndex(localOnly?: boolean): number {
   for (let i = 0; i < WORKERS.length; i++) {
-    if (!state.active.has(i)) return i;
+    if (state.active.has(i)) continue;
+    if (localOnly && WORKERS[i].type !== "local") continue;
+    return i;
   }
   return -1;
 }
 
 function drain(): void {
-  while (state.pending.length > 0) {
-    const workerIdx = findFreeWorkerIndex();
-    if (workerIdx === -1) break;
+  let scheduled = true;
+  while (scheduled && state.pending.length > 0) {
+    scheduled = false;
+    for (let i = 0; i < state.pending.length; i++) {
+      const workerIdx = findFreeWorkerIndex(state.pending[i].localOnly);
+      if (workerIdx === -1) continue;
 
-    const entry = state.pending.shift()!;
-    updatePositions();
-    state.active.set(workerIdx, entry.jobId);
+      const [entry] = state.pending.splice(i, 1);
+      updatePositions();
+      state.active.set(workerIdx, entry.jobId);
+      scheduled = true;
 
-    const worker = WORKERS[workerIdx];
-    console.log(
-      `[job-queue] Starting job ${entry.jobId} on ${worker.type === "local" ? "local" : worker.host}`
-    );
+      const worker = WORKERS[workerIdx];
+      console.log(
+        `[job-queue] Starting job ${entry.jobId} on ${worker.type === "local" ? "local" : worker.host}`
+      );
 
-    const runner = getRunner();
-    if (!runner) {
-      console.error("[job-queue] No pipeline runner registered");
-      state.active.delete(workerIdx);
-      continue;
-    }
-
-    runner(entry.rawVideoPath, entry.jobId, worker)
-      .catch((err) => {
-        console.error(`[job-queue] Job ${entry.jobId} failed:`, err.message);
-      })
-      .finally(() => {
+      const runner = getRunner();
+      if (!runner) {
+        console.error("[job-queue] No pipeline runner registered");
         state.active.delete(workerIdx);
-        console.log(
-          `[job-queue] Job ${entry.jobId} finished on ${worker.type === "local" ? "local" : worker.host}, ` +
-          `${state.pending.length} queued, ${state.active.size} active`
-        );
-        drain();
-      });
+        break;
+      }
+
+      runner(entry.rawVideoPath, entry.jobId, worker)
+        .catch((err) => {
+          console.error(`[job-queue] Job ${entry.jobId} failed:`, err.message);
+        })
+        .finally(() => {
+          state.active.delete(workerIdx);
+          console.log(
+            `[job-queue] Job ${entry.jobId} finished on ${worker.type === "local" ? "local" : worker.host}, ` +
+            `${state.pending.length} queued, ${state.active.size} active`
+          );
+          drain();
+        });
+
+      break; // re-scan from the top after scheduling one
+    }
   }
 }

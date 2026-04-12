@@ -64,14 +64,14 @@ export async function fetchScrapePipelineMetrics(): Promise<ScrapePipelineMetric
   ] = await Promise.all([
     countWithFallback("8_Research_Assistant", "Table 8 total", undefined, ["estimated", "planned"]),
     countWithFallback("9_Octoparse_Scrapes", "Table 9 total", undefined, ["planned", "estimated"]),
-    countWithFallback("9_Octoparse_Scrapes", "Active completed", (q) => q.not("active", "is", null), ["planned", "estimated"]),
+    countWithFallback("9_Octoparse_Scrapes", "Active completed", (q) => q.not("active", "is", null), ["exact", "planned", "estimated"]),
     countWithFallback("9_Octoparse_Scrapes", "Active zero count", (q) => q.eq("active", "0"), ["planned", "estimated"]),
     countWithFallback("9_Octoparse_Scrapes", "Sold eligible", (q) => q.not("sold_link", "is", null), ["planned", "estimated"]),
-    countWithFallback("9_Octoparse_Scrapes", "Sold completed", (q) => q.eq("sold_scraped", "true"), ["planned", "estimated"]),
+    countWithFallback("9_Octoparse_Scrapes", "Sold completed", (q) => q.eq("sold_scraped", "true"), ["exact", "planned", "estimated"]),
     countWithFallback("9_Octoparse_Scrapes", "Sold zero count", (q) => q.eq("sold", "0"), ["planned", "estimated"]),
     countWithFallback("9_Octoparse_Scrapes", "Verification eligible", (q) => q.gt("sell_through", 60), ["planned", "estimated"]),
-    countWithFallback("9_Octoparse_Scrapes", "Verification completed", (q) => q.not("sold_verified_at", "is", null), ["planned", "estimated"]),
-    countWithFallback("9_Octoparse_Scrapes", "Confidence > 80%", (q) => q.gt("sold_confidence", 0.8), ["planned", "estimated"]),
+    countWithFallback("9_Octoparse_Scrapes", "Verification completed", (q) => q.not("sold_verified_at", "is", null), ["exact", "planned", "estimated"]),
+    countWithFallback("9_Octoparse_Scrapes", "Confidence > 80%", (q) => q.gt("sold_confidence", 0.8), ["exact", "planned", "estimated"]),
     supabase()
       .from("9_Octoparse_Scrapes")
       .select("original_url, active, sold, sell_through, sold_confidence, active_lastscraped, sold_lastscraped, sold_verified_at")

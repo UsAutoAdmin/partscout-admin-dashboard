@@ -69,6 +69,28 @@ async function scpFrom(host: string, remotePath: string, localPath: string): Pro
   );
 }
 
+/**
+ * Write a filter_complex string to a file on the remote, bypassing all shell
+ * quoting issues (apostrophes, $, backticks in caption text).
+ * Returns the remote path to the filter script file.
+ */
+async function writeRemoteFilterScript(
+  host: string,
+  remoteDir: string,
+  filterComplex: string
+): Promise<string> {
+  const tmpId = crypto.randomBytes(4).toString("hex");
+  const localFilter = `/tmp/vgen_filter_${tmpId}.txt`;
+  const remoteFilter = `${remoteDir}/filter_${tmpId}.txt`;
+  await fs.writeFile(localFilter, filterComplex, "utf-8");
+  try {
+    await scp(localFilter, host, remoteFilter);
+  } finally {
+    fs.unlink(localFilter).catch(() => {});
+  }
+  return remoteFilter;
+}
+
 type JobUpdater = (patch: Partial<AutoJobStatus>) => void;
 
 /**
@@ -158,7 +180,7 @@ export async function runPipelineRemote(
     for (const seg of segments) {
       const filename = seg.label === "Body" ? "body_segment.mp4" : `hook_${seg.index}.mp4`;
       const remoteSeg = `${remoteDir}/${filename}`;
-      await ssh(host, `${REMOTE_FFMPEG_BIN} -y -ss ${seg.start.toFixed(3)} -i ${remoteRaw} -t ${(seg.end - seg.start).toFixed(3)} -c copy -avoid_negative_ts make_zero ${remoteSeg}`);
+      await ssh(host, `${REMOTE_FFMPEG_BIN} -y -ss ${seg.start.toFixed(3)} -i ${remoteRaw} -t ${(seg.end - seg.start).toFixed(3)} -c:v libx264 -preset ultrafast -crf 14 -c:a aac -b:a 192k -avoid_negative_ts make_zero ${remoteSeg}`);
     }
 
     // ── 6. Overlay detection (LLM, local) ──
@@ -339,14 +361,16 @@ function parseSilenceOutput(text: string): SilenceRange[] {
 
 async function trimSegmentEdgesLocal(segments: Segment[], words: TranscriptWord[]): Promise<Segment[]> {
   const PAD_BEFORE = 0.08;
-  const PAD_AFTER = 0.15;
+  const PAD_AFTER_HOOK = 0.15;
+  const PAD_AFTER_BODY = 0.6;
 
   return segments.map((seg) => {
     const segWords = words.filter((w) => w.start >= seg.start - 0.1 && w.end <= seg.end + 0.1);
     if (segWords.length === 0) return seg;
 
+    const isBody = seg.label === "Body";
     let newStart = segWords[0].start - PAD_BEFORE;
-    let newEnd = segWords[segWords.length - 1].end + PAD_AFTER;
+    let newEnd = segWords[segWords.length - 1].end + (isBody ? PAD_AFTER_BODY : PAD_AFTER_HOOK);
 
     newStart = Math.max(seg.start, newStart);
     newEnd = Math.min(seg.end, newEnd);
@@ -531,12 +555,15 @@ async function composeBodyRemote(
 
   const filterComplex = filterParts.join(";");
 
+  const filterScript = await writeRemoteFilterScript(host, remoteDir, filterComplex);
+
   let cmd = `${REMOTE_FFMPEG_BIN} -y ${inputArgs.join(" ")}`;
-  cmd += ` -filter_complex "${filterComplex}" -map "[vout]" -map "[aout]"`;
+  cmd += ` -filter_complex_script ${filterScript} -map "[vout]" -map "[aout]"`;
   cmd += ` -c:v libx264 -preset fast -crf 18 -c:a aac -b:a 192k -r 30 -shortest -movflags +faststart`;
   cmd += ` ${remoteOutput}`;
 
   await ssh(host, cmd);
+  ssh(host, `rm -f ${filterScript}`).catch(() => {});
 }
 
 // ─── Remote hook composition via SSH ─────────────────────────────────────────
@@ -621,13 +648,16 @@ async function processHookRemote(
 
   const filterComplex = [brollFilter, headFilter, stackFilter, bannerFilter, audioFilter].join(";");
 
+  const hookFilterScript = await writeRemoteFilterScript(host, remoteDir, filterComplex);
+
   let hookCmd = `${REMOTE_FFMPEG_BIN} -y ${inputArgs.join(" ")} -t ${hookDuration.toFixed(2)}`;
-  hookCmd += ` -filter_complex "${filterComplex}" -map "[vout]" -map "[aout]"`;
+  hookCmd += ` -filter_complex_script ${hookFilterScript} -map "[vout]" -map "[aout]"`;
   hookCmd += ` -c:v libx264 -preset fast -crf 18 -c:a aac -b:a 192k -r 30`;
   if (!hookHasAudio && !riserExists) hookCmd += ` -shortest`;
   hookCmd += ` ${rHookOnly}`;
 
   await ssh(host, hookCmd);
+  ssh(host, `rm -f ${hookFilterScript}`).catch(() => {});
 
   // Probe body audio for concat
   let bodyHasAudio = false;
@@ -647,13 +677,16 @@ async function processHookRemote(
     `[hv][ha][bv][ba]concat=n=2:v=1:a=1[vfinal][afinal]`,
   ].join(";");
 
+  const concatFilterScript = await writeRemoteFilterScript(host, remoteDir, concatFilter);
+
   let concatCmd = `${REMOTE_FFMPEG_BIN} -y -i ${rHookOnly} -i ${remoteComposedBody}`;
-  concatCmd += ` -filter_complex "${concatFilter}" -map "[vfinal]" -map "[afinal]"`;
+  concatCmd += ` -filter_complex_script ${concatFilterScript} -map "[vfinal]" -map "[afinal]"`;
   concatCmd += ` -c:v libx264 -preset fast -crf 18 -c:a aac -b:a 192k -r 30`;
   if (!bodyHasAudio) concatCmd += ` -shortest`;
   concatCmd += ` -movflags +faststart ${remoteOutput}`;
 
   await ssh(host, concatCmd);
+  ssh(host, `rm -f ${concatFilterScript}`).catch(() => {});
 
   // Clean up intermediate
   ssh(host, `rm -f ${rHookOnly}`).catch(() => {});

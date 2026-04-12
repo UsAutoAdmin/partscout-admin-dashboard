@@ -13,6 +13,7 @@ import {
   COLOR_GRADE_FILTER,
   REMOTE_FFMPEG_BIN,
   REMOTE_FFPROBE_BIN,
+  REMOTE_FONT_PATH,
 } from "./constants";
 import { generateBannerImage } from "./hook-banner";
 import { buildCaptionDrawtext, CaptionChunk } from "./captions";
@@ -57,6 +58,23 @@ async function scpFrom(host: string, remotePath: string, localPath: string): Pro
 
 function fileExists(p: string): Promise<boolean> {
   return fs.access(p).then(() => true).catch(() => false);
+}
+
+async function writeRemoteFilterScript(
+  host: string,
+  remoteDir: string,
+  filterComplex: string
+): Promise<string> {
+  const tmpId = crypto.randomBytes(4).toString("hex");
+  const localFilter = `/tmp/vgen_filter_${tmpId}.txt`;
+  const remoteFilter = `${remoteDir}/filter_${tmpId}.txt`;
+  await fs.writeFile(localFilter, filterComplex, "utf-8");
+  try {
+    await scp(localFilter, host, remoteFilter);
+  } finally {
+    fs.unlink(localFilter).catch(() => {});
+  }
+  return remoteFilter;
 }
 
 async function pickRandomBroll(): Promise<string> {
@@ -172,7 +190,7 @@ export async function processHookWithBodyRemote(
   const brollFilter = `[0:v]setsar=1,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}${lutFilter}${gradeFilter},scale=${VIDEO_WIDTH}:${HALF_HEIGHT},pad=${VIDEO_WIDTH}:${HALF_HEIGHT}:-1:-1:black,setpts=PTS-STARTPTS,format=yuv420p[broll]`;
   const headFilter = `[1:v]setsar=1,scale=${VIDEO_WIDTH}:${HALF_HEIGHT}:force_original_aspect_ratio=increase,crop=${VIDEO_WIDTH}:${HALF_HEIGHT}${lutFilter}${gradeFilter},scale=${VIDEO_WIDTH}:${HALF_HEIGHT},pad=${VIDEO_WIDTH}:${HALF_HEIGHT}:-1:-1:black,format=yuv420p[head]`;
   const captionFilter = (hookCaptions && hookCaptions.length > 0)
-    ? buildCaptionDrawtext(hookCaptions, hookSegmentStart ?? 0)
+    ? buildCaptionDrawtext(hookCaptions, hookSegmentStart ?? 0, REMOTE_FONT_PATH)
     : "";
 
   const stackFilter = captionFilter
@@ -200,13 +218,16 @@ export async function processHookWithBodyRemote(
 
   const filterComplex = [brollFilter, headFilter, stackFilter, bannerFilter, audioFilter].join(";");
 
+  const hookFilterScript = await writeRemoteFilterScript(host, remoteDir, filterComplex);
+
   let hookCmd = `${REMOTE_FFMPEG} -y ${inputArgs.join(" ")} -t ${hookDuration.toFixed(2)}`;
-  hookCmd += ` -filter_complex "${filterComplex}" -map "[vout]" -map "[aout]"`;
+  hookCmd += ` -filter_complex_script ${hookFilterScript} -map "[vout]" -map "[aout]"`;
   hookCmd += ` -c:v libx264 -preset fast -crf 18 -c:a aac -b:a 192k -r 30`;
   if (!hookHasAudio && !useRiser) hookCmd += ` -shortest`;
   hookCmd += ` ${rHookOnly}`;
 
   await ssh(host, hookCmd);
+  ssh(host, `rm -f ${hookFilterScript}`).catch(() => {});
 
   // Probe body audio remotely
   let bodyHasAudio = false;
@@ -230,13 +251,16 @@ export async function processHookWithBodyRemote(
     `[hv][ha][bv][ba]concat=n=2:v=1:a=1[vfinal][afinal]`,
   ].join(";");
 
+  const concatFilterScript = await writeRemoteFilterScript(host, remoteDir, concatFilterParts);
+
   let concatCmd = `${REMOTE_FFMPEG} -y -i ${rHookOnly} -i ${rBody}`;
-  concatCmd += ` -filter_complex "${concatFilterParts}" -map "[vfinal]" -map "[afinal]"`;
+  concatCmd += ` -filter_complex_script ${concatFilterScript} -map "[vfinal]" -map "[afinal]"`;
   concatCmd += ` -c:v libx264 -preset fast -crf 18 -c:a aac -b:a 192k -r 30`;
   if (!bodyHasAudio) concatCmd += ` -shortest`;
   concatCmd += ` -movflags +faststart ${rOutput}`;
 
   await ssh(host, concatCmd);
+  ssh(host, `rm -f ${concatFilterScript}`).catch(() => {});
 
   await scpFrom(host, rOutput, outputPath);
 

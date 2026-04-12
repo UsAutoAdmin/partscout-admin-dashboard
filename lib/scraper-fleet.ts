@@ -10,10 +10,7 @@ export type FleetScraperStatus = {
   logTail: string[];
   dashboardUrl: string;
   agentUrl: string;
-  metrics?: {
-    sold: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number; recentTasks?: any[] };
-    active: { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number; recentTasks?: any[] };
-  } | null;
+  metrics?: Record<string, { status: string; rateNum: number; targetWorkers: number; targetBrowsers: number; dbWritesWindow: number; recentTasks?: any[] }> | null;
   error?: string;
 };
 

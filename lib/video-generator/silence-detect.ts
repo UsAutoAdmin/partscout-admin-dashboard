@@ -232,12 +232,14 @@ export async function trimSegmentEdges(
   words?: WordTimestamp[]
 ): Promise<Segment[]> {
   const PAD_BEFORE = 0.08;
-  const PAD_AFTER = 0.15;
+  const PAD_AFTER_HOOK = 0.15;
+  const PAD_AFTER_BODY = 0.6;
   const trimmed: Segment[] = [];
 
   for (const seg of segments) {
     let newStart = seg.start;
     let newEnd = seg.end;
+    const isBody = seg.label === "Body";
 
     // Try transcript-based trimming first
     if (words && words.length > 0) {
@@ -247,7 +249,7 @@ export async function trimSegmentEdges(
 
       if (segWords.length > 0) {
         newStart = segWords[0].start - PAD_BEFORE;
-        newEnd = segWords[segWords.length - 1].end + PAD_AFTER;
+        newEnd = segWords[segWords.length - 1].end + (isBody ? PAD_AFTER_BODY : PAD_AFTER_HOOK);
       }
     } else {
       // Fallback: audio-based probe
@@ -409,6 +411,7 @@ export function validateBodySegment(
 
 /**
  * Extract a segment from a video file using FFmpeg seek + duration.
+ * Re-encodes for frame-accurate seeking so caption timestamps stay in sync.
  */
 export async function extractSegment(
   inputPath: string,
@@ -421,7 +424,8 @@ export async function extractSegment(
     "-ss", start.toFixed(3),
     "-i", inputPath,
     "-t", (end - start).toFixed(3),
-    "-c", "copy",
+    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "14",
+    "-c:a", "aac", "-b:a", "192k",
     "-avoid_negative_ts", "make_zero",
     outputPath,
   ]);

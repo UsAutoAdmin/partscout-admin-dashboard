@@ -47,6 +47,13 @@ const navItems = [
     ),
   },
   {
+    name: "Scraper Monitor",
+    path: "/scrapes/monitor",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><rect x="2" y="3" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="1.5"/><path d="M6 18h8M10 15v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M6 9l2.5-2 2.5 3 3-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+    ),
+  },
+  {
     name: "Infrastructure",
     path: "/infrastructure",
     icon: (
@@ -87,6 +94,16 @@ const navItems = [
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
         <path d="M10 1.667A8.333 8.333 0 1018.333 10 8.342 8.342 0 0010 1.667zm0 12.916a.625.625 0 110-1.25.625.625 0 010 1.25zm.625-3.75h-1.25V5.833h1.25v5z" fill="currentColor"/>
+      </svg>
+    ),
+  },
+  {
+    name: "Part Finder",
+    path: "/part-finder",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M8.333 2.5a5.833 5.833 0 103.584 10.444l3.61 3.61a.833.833 0 001.179-1.178l-3.61-3.61A5.833 5.833 0 008.333 2.5zm0 1.667a4.167 4.167 0 110 8.333 4.167 4.167 0 010-8.333z" fill="currentColor"/>
+        <path d="M8.333 6.667v3.333M6.667 8.333H10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
       </svg>
     ),
   },

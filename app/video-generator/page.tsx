@@ -1637,6 +1637,7 @@ export default function VideoGenerator() {
   const previewRef = useRef<HTMLVideoElement>(null);
   const [bulkFiles, setBulkFiles] = useState<File[]>([]);
   const [bulkUploading, setBulkUploading] = useState(false);
+  const [useAllMinis, setUseAllMinis] = useState(true);
   const [scriptEntries, setScriptEntries] = useState<{ year?: string; make: string; model: string; part: string }[]>([]);
   const [scriptUploading, setScriptUploading] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -1681,6 +1682,7 @@ export default function VideoGenerator() {
     for (const file of files) {
       const formData = new FormData();
       formData.append("video", file);
+      if (!useAllMinis) formData.append("localOnly", "1");
       try {
         await fetch("/api/video-generator/auto-process", {
           method: "POST",
@@ -2063,6 +2065,35 @@ export default function VideoGenerator() {
         {/* ─── AUTO / BULK MODE ─── */}
         {mode === "auto" && (
           <>
+            {/* Distribution Toggle */}
+            <div className="flex items-center justify-between rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 01-3-3m3 3a3 3 0 100 6h13.5a3 3 0 100-6m-16.5-3a3 3 0 013-3h13.5a3 3 0 013 3m-19.5 0a4.5 4.5 0 01.9-2.7L5.737 5.1a3.375 3.375 0 012.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 01.9 2.7m0 0a3 3 0 01-3 3m0 3h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008zm-3 6h.008v.008h-.008v-.008zm0-6h.008v.008h-.008v-.008z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
+                    {useAllMinis ? "All Mac Minis" : "This Mac Mini Only"}
+                  </p>
+                  <p className="text-xs text-gray-400 dark:text-gray-500">
+                    {useAllMinis ? "Distribute across local + 2 remote Minis" : "Process everything on this machine"}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setUseAllMinis((v) => !v)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  useAllMinis ? "bg-brand-500" : "bg-gray-300 dark:bg-gray-600"
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                    useAllMinis ? "translate-x-6" : "translate-x-1"
+                  }`}
+                />
+              </button>
+            </div>
+
             {/* Bulk Upload Zone */}
             <div
               className="relative rounded-2xl border-2 border-dashed p-8 text-center transition-colors cursor-pointer border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-white/[0.02] hover:border-brand-400 dark:hover:border-brand-500"
@@ -2186,46 +2217,82 @@ export default function VideoGenerator() {
                           <div className="flex items-center gap-1.5 flex-shrink-0">
                             {aj.phase === "done" && aj.outputFiles.length > 0 && (
                               <>
-                                {aj.outputFiles.map((f, fIdx) => {
-                                  const isFlagged = flaggedIndices.has(fIdx);
-                                  const flagReason = (aj.hookFlags ?? []).find((fl) => fl.index === fIdx)?.reason;
+                                <div className="flex items-center gap-1">
+                                  {aj.outputFiles.map((f, fIdx) => {
+                                    const isFlagged = flaggedIndices.has(fIdx);
+                                    const flagReason = (aj.hookFlags ?? []).find((fl) => fl.index === fIdx)?.reason;
+                                    const isActive = previewVideo?.jobId === aj.id && previewVideo?.file === f;
 
-                                  return (
-                                    <div key={f} className="relative inline-flex items-center gap-0.5">
-                                      <button
-                                        onClick={() => togglePreview(aj.id, f)}
-                                        className={`inline-flex rounded-l-lg px-2 py-1.5 text-[11px] font-medium transition-colors ${
-                                          previewVideo?.jobId === aj.id && previewVideo?.file === f
-                                            ? "bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300"
-                                            : "bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
-                                        }`}
-                                        title="Preview"
-                                      >
-                                        <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                      </button>
-                                      <a
-                                        href={`/api/video-generator/download/${aj.id}/${encodeURIComponent(f)}`}
-                                        className="inline-flex rounded-r-lg bg-gray-100 dark:bg-gray-800 px-2 py-1.5 text-[11px] font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                                        download
-                                      >
-                                        {f.replace(/\.mp4$/, "")}
-                                      </a>
-                                      {isFlagged && (
-                                        <span
-                                          className="absolute -top-1.5 -right-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-orange-400 text-white text-[8px] cursor-help"
-                                          title={flagReason || "Possible stumble detected"}
+                                    return (
+                                      <div key={f} className="inline-flex items-center gap-px">
+                                        <div className="inline-flex items-center rounded-lg overflow-hidden">
+                                          <button
+                                            onClick={() => togglePreview(aj.id, f)}
+                                            className={`px-1.5 py-1.5 transition-colors ${
+                                              isActive
+                                                ? "bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300"
+                                                : "bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700"
+                                            }`}
+                                            title={`Preview ${f.replace(/\.mp4$/, "")}`}
+                                          >
+                                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
+                                            </svg>
+                                          </button>
+                                          <a
+                                            href={`/api/video-generator/download/${aj.id}/${encodeURIComponent(f)}`}
+                                            className={`px-2 py-1.5 text-xs font-semibold transition-colors ${
+                                              isFlagged
+                                                ? "bg-orange-50 dark:bg-orange-500/10 text-orange-500 dark:text-orange-400"
+                                                : "bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700"
+                                            }`}
+                                            title={isFlagged ? (flagReason || "Possible stumble") : `Download ${f.replace(/\.mp4$/, "")}`}
+                                            download
+                                          >
+                                            {fIdx + 1}
+                                          </a>
+                                        </div>
+                                        <button
+                                          onClick={async () => {
+                                            const newFlagged = !isFlagged;
+                                            try {
+                                              await fetch("/api/video-generator/auto-process", {
+                                                method: "PATCH",
+                                                headers: { "Content-Type": "application/json" },
+                                                body: JSON.stringify({ jobId: aj.id, hookIndex: fIdx, flagged: newFlagged }),
+                                              });
+                                              setAutoJobs((prev) =>
+                                                prev.map((j) => {
+                                                  if (j.id !== aj.id) return j;
+                                                  const flags = [...(j.hookFlags ?? [])];
+                                                  const ex = flags.find((fl) => fl.index === fIdx);
+                                                  if (ex) {
+                                                    ex.flagged = newFlagged;
+                                                    if (newFlagged && !ex.reason) ex.reason = "Manually flagged";
+                                                    if (!newFlagged) ex.reason = undefined;
+                                                  } else {
+                                                    flags.push({ index: fIdx, flagged: newFlagged, reason: newFlagged ? "Manually flagged" : undefined });
+                                                  }
+                                                  return { ...j, hookFlags: flags };
+                                                })
+                                              );
+                                            } catch {}
+                                          }}
+                                          className={`inline-flex items-center justify-center w-6 h-6 rounded-md transition-colors ${
+                                            isFlagged
+                                              ? "bg-orange-100 dark:bg-orange-500/20 text-orange-500 hover:bg-orange-200 dark:hover:bg-orange-500/30"
+                                              : "bg-gray-50 dark:bg-gray-800/50 text-gray-300 dark:text-gray-600 hover:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-500/10"
+                                          }`}
+                                          title={isFlagged ? (flagReason || "Flagged — click to unflag") : "Click to flag this video"}
                                         >
-                                          <svg className="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 24 24">
-                                            <path d="M14.4 6H20v12.6L14.4 6zM4 4h10l7 14H4V4z" />
+                                          <svg className="w-3.5 h-3.5" fill={isFlagged ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={isFlagged ? 0 : 2}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 3v18m0-18l9 6-9 6" />
                                           </svg>
-                                        </span>
-                                      )}
-                                    </div>
-                                  );
-                                })}
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
                                 <a
                                   href={`/api/video-generator/download-all/${aj.id}`}
                                   className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-success-500 hover:bg-success-50 dark:hover:bg-success-500/10 transition-colors"

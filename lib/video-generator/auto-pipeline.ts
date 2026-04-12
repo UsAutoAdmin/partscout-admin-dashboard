@@ -70,9 +70,10 @@ registerPipelineRunner(async (rawVideoPath, jobId, worker) => {
 
 export async function startAutoPipeline(
   rawVideoPath: string,
-  jobId: string
+  jobId: string,
+  opts?: { localOnly?: boolean }
 ): Promise<AutoJobStatus> {
-  const position = enqueueJob(rawVideoPath, jobId);
+  const position = enqueueJob(rawVideoPath, jobId, { localOnly: opts?.localOnly });
 
   const job: AutoJobStatus = {
     id: jobId,
