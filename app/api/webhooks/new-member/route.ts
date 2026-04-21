@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { getServiceRoleClient } from "@/lib/supabase";
 import { parseSkoolNewMemberPayload } from "@/lib/new-member/parse-zap-payload";
+import { scheduleDequeueFromBaseUrl } from "@/lib/new-member/trigger-dequeue";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -36,8 +37,9 @@ function verifyWebhookSecret(request: Request): boolean {
 }
 
 /**
- * Thin Vercel worker: validate Zapier/Skool secret, insert into Supabase queue.
- * Full automation runs on your local machine (separate checkout) via a poller.
+ * Validate Zapier/Skool secret, insert into Supabase, then trigger processing on
+ * this deployment (fire-and-forget POST to /api/internal/new-member-dequeue).
+ * Set INTERNAL_NEW_MEMBER_SECRET on Vercel so the trigger can authenticate.
  */
 export async function POST(request: Request) {
   try {
@@ -121,11 +123,14 @@ export async function POST(request: Request) {
       );
     }
 
+    const origin = new URL(request.url);
+    scheduleDequeueFromBaseUrl(`${origin.protocol}//${origin.host}`);
+
     return NextResponse.json({
       ok: true,
       queued: true,
       queueId: data.id,
-      message: "Run the local worker to process this row",
+      message: "Processing started on this deployment (dequeue triggered)",
     });
   } catch (e) {
     console.error("[webhooks/new-member] unhandled", e);
