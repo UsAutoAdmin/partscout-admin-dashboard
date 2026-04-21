@@ -90,6 +90,14 @@ function deepFindEmailAndZip(
   found: { email?: string; zip?: string },
 ): void {
   if (depth > 8 || (found.email && found.zip)) return;
+  if (typeof v === "number") {
+    const s = String(v);
+    if (!found.zip && /^\d{5}(-\d{4})?$/i.test(s)) {
+      const z = s.match(US_ZIP_RE);
+      if (z) found.zip = z[1];
+    }
+    return;
+  }
   if (typeof v === "string") {
     if (!found.email) {
       const em = v.match(EMAIL_RE);
