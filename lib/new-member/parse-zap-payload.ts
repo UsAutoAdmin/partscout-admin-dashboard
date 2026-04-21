@@ -162,6 +162,7 @@ export function parseSkoolNewMemberPayload(body: unknown):
     "first_name",
     "FirstName",
     "fname",
+    "firstname",
     "given_name",
   );
   const lastName = pick(
@@ -170,14 +171,17 @@ export function parseSkoolNewMemberPayload(body: unknown):
     "last_name",
     "LastName",
     "lname",
+    "lastname",
     "family_name",
   );
   const phoneRaw = pick(
     src,
     "phone",
     "Phone",
+    "phone number",
     "phone_number",
     "phoneNumber",
+    "Phone Number",
     "mobile",
     "Mobile",
   );

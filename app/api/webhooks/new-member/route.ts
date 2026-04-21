@@ -38,11 +38,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const raw = await request.text();
   let body: unknown;
   try {
-    body = await request.json();
+    if (raw.trim().startsWith("{") || raw.trim().startsWith("[")) {
+      body = JSON.parse(raw) as unknown;
+    } else {
+      const ct = (request.headers.get("content-type") || "").toLowerCase();
+      if (ct.includes("application/x-www-form-urlencoded") || raw.includes("=")) {
+        const p = new URLSearchParams(raw);
+        const o: Record<string, string> = {};
+        p.forEach((v, k) => {
+          o[k] = v;
+        });
+        body = o;
+      } else {
+        body = JSON.parse(raw) as unknown;
+      }
+    }
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Body must be valid JSON (object) or x-www-form-urlencoded" },
+      { status: 400 },
+    );
   }
 
   const parsed = parseSkoolNewMemberPayload(body);
