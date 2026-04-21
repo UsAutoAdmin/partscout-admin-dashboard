@@ -170,6 +170,8 @@ export async function executeNewMemberWebhook(
       vehicles_extracted: sheet.vehicleCount,
       parts_matched: sheet.matchedPartCount,
       share_url: fullShareUrl,
+      automation_yard_city: yardResult.yard.city,
+      automation_yard_state: yardResult.yard.state,
     })
     .eq("id", runId);
 
@@ -190,41 +192,70 @@ export async function executeNewMemberWebhook(
       crmTracked: false,
     };
   } else {
-    const sendResult = await sendPickSheetGmail({
-      to: email,
-      firstName: firstName || "there",
-      lastName: lastName || undefined,
-      sharePath: sheet.sharePath,
-      yardNameForSubject: yardDisplay,
-      yardCity: yardResult.yard.city,
-      yardState: yardResult.yard.state,
-      partCount,
-      vehicleCount: sheet.vehicleCount,
-      customMessage: process.env.EMAIL_PICKSHEET_CUSTOM_MESSAGE?.trim() || undefined,
-      crmTracking: newMemberCrmTracking(),
-      phone: phone ?? undefined,
-      zip: zip,
-      includeAdminBcc: true,
-    });
-    if (sendResult.ok) {
-      const now = new Date().toISOString();
-      await supabase
-        .from("new_member_automation_runs")
-        .update({ email_sent_at: now })
-        .eq("id", runId);
-      emailState = {
-        emailSent: true,
-        gmailMessageId: sendResult.messageId,
-        crmTracked: sendResult.crmTracked,
-      };
-    } else {
+    const allowGmailOnVercel =
+      process.env.ALLOW_GMAIL_ON_VERCEL === "1" || process.env.ALLOW_GMAIL_ON_VERCEL === "true";
+    const isVercel = process.env.VERCEL === "1";
+    const sendGmailHere = !isVercel || allowGmailOnVercel;
+
+    if (!sendGmailHere) {
       emailState = {
         emailSent: false,
-        emailSkippedReason: `${sendResult.code}: ${sendResult.error}`,
+        emailSkippedReason:
+          "deferred_local: Gmail is not sent on Vercel. Run the local app with GOOGLE_* and POST /api/internal/pick-sheet-email-from-run (or use scripts/poll-deferred-pick-emails.mjs).",
         gmailMessageId: null,
         crmTracked: false,
       };
+    } else {
+      const sendResult = await sendPickSheetGmail({
+        to: email,
+        firstName: firstName || "there",
+        lastName: lastName || undefined,
+        sharePath: sheet.sharePath,
+        yardNameForSubject: yardDisplay,
+        yardCity: yardResult.yard.city,
+        yardState: yardResult.yard.state,
+        partCount,
+        vehicleCount: sheet.vehicleCount,
+        customMessage: process.env.EMAIL_PICKSHEET_CUSTOM_MESSAGE?.trim() || undefined,
+        crmTracking: newMemberCrmTracking(),
+        phone: phone ?? undefined,
+        zip: zip,
+        includeAdminBcc: true,
+      });
+      if (sendResult.ok) {
+        const now = new Date().toISOString();
+        await supabase
+          .from("new_member_automation_runs")
+          .update({ email_sent_at: now, pick_email_deferred: false })
+          .eq("id", runId);
+        emailState = {
+          emailSent: true,
+          gmailMessageId: sendResult.messageId,
+          crmTracked: sendResult.crmTracked,
+        };
+      } else {
+        emailState = {
+          emailSent: false,
+          emailSkippedReason: `${sendResult.code}: ${sendResult.error}`,
+          gmailMessageId: null,
+          crmTracked: false,
+        };
+      }
     }
+  }
+
+  const emailError =
+    emailState.emailSent === true ? null : emailState.emailSkippedReason;
+  const pickEmailDeferred =
+    emailState.emailSent === false &&
+    "emailSkippedReason" in emailState &&
+    emailState.emailSkippedReason.startsWith("deferred_local");
+  const { error: emailMetaErr } = await supabase
+    .from("new_member_automation_runs")
+    .update({ email_error: emailError, pick_email_deferred: pickEmailDeferred })
+    .eq("id", runId);
+  if (emailMetaErr) {
+    console.error("[executeNewMemberWebhook] email_error column update", emailMetaErr.message);
   }
 
   const e164 = phone ? toE164(phone) : null;
@@ -290,6 +321,7 @@ export async function executeNewMemberWebhook(
       vehicles: sheet.vehicleCount,
       parts: sheet.matchedPartCount,
       minPartsForEmail: minPartsForEmail,
+      pickEmailDeferred,
       ...emailState,
       smsQueued: smsQueued || smsSentViaTwilio,
       smsSentVia: smsSentViaTwilio ? "twilio_vercel" : smsQueued ? "mac_mini_queue" : null,

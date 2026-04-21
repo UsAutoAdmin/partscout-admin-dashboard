@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { timingSafeEqual } from "crypto";
 import { getServiceRoleClient } from "@/lib/supabase";
+import { unauthorized, verifyDequeueAuth } from "@/lib/internal/verify-dequeue-or-cron";
 import { executeNewMemberWebhook } from "@/lib/new-member/execute-new-member-webhook";
 import type { ParsedNewMemberPayload } from "@/lib/new-member/parse-zap-payload";
 import { scheduleDequeueFromEnv } from "@/lib/new-member/trigger-dequeue";
@@ -8,38 +8,6 @@ import { scheduleDequeueFromEnv } from "@/lib/new-member/trigger-dequeue";
 export const dynamic = "force-dynamic";
 /** Vercel Pro: raise in dashboard if automation (Railway + Gmail) needs more time. */
 export const maxDuration = 300;
-
-function tokenFromRequest(request: Request): string {
-  const auth = request.headers.get("authorization");
-  if (auth?.startsWith("Bearer ")) return auth.slice(7).trim();
-  return request.headers.get("x-internal-secret")?.trim() ?? "";
-}
-
-function verifyDequeueAuth(request: Request): boolean {
-  const token = tokenFromRequest(request);
-  if (!token) return false;
-  const internal = process.env.INTERNAL_NEW_MEMBER_SECRET?.trim();
-  if (internal) {
-    try {
-      const a = Buffer.from(token, "utf8");
-      const b = Buffer.from(internal, "utf8");
-      if (a.length === b.length && timingSafeEqual(a, b)) return true;
-    } catch {
-      /* fall through */
-    }
-  }
-  const cron = process.env.CRON_SECRET?.trim();
-  if (cron) {
-    try {
-      const a = Buffer.from(token, "utf8");
-      const c = Buffer.from(cron, "utf8");
-      if (a.length === c.length && timingSafeEqual(a, c)) return true;
-    } catch {
-      /* fall through */
-    }
-  }
-  return false;
-}
 
 function isPayload(v: unknown): v is ParsedNewMemberPayload {
   if (v == null || typeof v !== "object") return false;
@@ -73,7 +41,7 @@ export async function GET(request: Request) {
 
 async function runDequeue(request: Request) {
   if (!verifyDequeueAuth(request)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return unauthorized();
   }
 
   const supabase = getServiceRoleClient();

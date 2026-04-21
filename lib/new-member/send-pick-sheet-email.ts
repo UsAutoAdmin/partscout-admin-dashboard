@@ -1,5 +1,5 @@
 import "server-only";
-import { isGmailOutboundConfigured, sendGmailHtmlEmail } from "@/lib/gmail";
+import { isGmailOutboundConfigured, missingGmailOutboundEnv, sendGmailHtmlEmail } from "@/lib/gmail";
 import { getServiceRoleClient } from "@/lib/supabase";
 import { prepareCrmTrackedSend } from "@/lib/crm/prepare-tracked-send";
 import { buildEmailHtml, buildPlainText } from "@/lib/email-templates";
@@ -149,8 +149,17 @@ export async function sendPickSheetGmail(
   };
 
   if (!isGmailOutboundConfigured()) {
+    const missing = missingGmailOutboundEnv();
+    console.error(
+      "[sendPickSheetGmail] Gmail OAuth not configured; add to this environment (e.g. Vercel):",
+      missing.join(", "),
+    );
     await rollbackCrm();
-    return { ok: false, error: "Gmail OAuth not configured", code: "gmail_not_configured" };
+    return {
+      ok: false,
+      error: `Gmail OAuth not configured (missing: ${missing.join(", ")})`,
+      code: "gmail_not_configured",
+    };
   }
 
   try {

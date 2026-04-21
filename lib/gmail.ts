@@ -16,13 +16,20 @@ function rfc822ToGmailRaw(rfc822: string): string {
     .replace(/=+$/, "");
 }
 
+const GMAIL_OAUTH_ENV_KEYS = [
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "GOOGLE_REFRESH_TOKEN",
+  "GOOGLE_EMAIL_ADDRESS",
+] as const;
+
+/** Which of the required Gmail OAuth env vars are missing (no values logged). */
+export function missingGmailOutboundEnv(): string[] {
+  return GMAIL_OAUTH_ENV_KEYS.filter((k) => !process.env[k]?.trim());
+}
+
 export function isGmailOutboundConfigured(): boolean {
-  return Boolean(
-    process.env.GOOGLE_CLIENT_ID &&
-      process.env.GOOGLE_CLIENT_SECRET &&
-      process.env.GOOGLE_REFRESH_TOKEN &&
-      process.env.GOOGLE_EMAIL_ADDRESS,
-  );
+  return missingGmailOutboundEnv().length === 0;
 }
 
 export interface GmailMessage {
