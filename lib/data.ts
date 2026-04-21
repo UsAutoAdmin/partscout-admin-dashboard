@@ -1,6 +1,4 @@
 import { getServiceRoleClient } from "@/lib/supabase";
-import { getStripe } from "@/lib/stripe";
-import { resolveClerkMrrForDashboard, applyStripeMrrOverride } from "@/lib/resolve-clerk-mrr";
 import { fetchInboxMessages } from "@/lib/gmail";
 
 const supabase = () => getServiceRoleClient();
@@ -22,50 +20,8 @@ export function isPaidUser(u: User) {
   );
 }
 
-async function fetchStripeData() {
-  let stripe = { mrr: 0, activeSubs: 0, rev30d: 0, charges30d: 0, canceled30d: 0, balance: 0, recent: [] as { id: string; amount: number; customer: string | null; created: string }[] };
-  try {
-    const s = getStripe();
-    if (s) {
-      const ago30 = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
-      const [subs, charges, canceled, bal] = await Promise.all([
-        s.subscriptions.list({ status: "active", limit: 100 }),
-        s.charges.list({ limit: 100, created: { gte: ago30 } }),
-        s.subscriptions.list({ status: "canceled", limit: 100, created: { gte: ago30 } }),
-        s.balance.retrieve(),
-      ]);
-      let mrr = 0;
-      for (const sub of subs.data)
-        for (const item of sub.items.data) {
-          const amt = (item.price.unit_amount ?? 0) / 100;
-          if (item.price.recurring?.interval === "month") mrr += amt;
-          else if (item.price.recurring?.interval === "year") mrr += amt / 12;
-        }
-      const ok = charges.data.filter((c) => c.paid && !c.refunded);
-      stripe = {
-        mrr: Math.round(mrr * 100) / 100,
-        activeSubs: subs.data.length,
-        rev30d: Math.round(ok.reduce((s, c) => s + c.amount / 100, 0) * 100) / 100,
-        charges30d: ok.length,
-        canceled30d: canceled.data.length,
-        balance: Math.round(bal.available.reduce((s, b) => s + b.amount / 100, 0) * 100) / 100,
-        recent: ok.slice(0, 8).map((c) => ({ id: c.id, amount: c.amount / 100, customer: c.billing_details?.email ?? null, created: new Date(c.created * 1000).toISOString() })),
-      };
-    }
-  } catch {}
-  return stripe;
-}
-
-export async function fetchRevenue(users: User[]) {
-  const [stripe, clerkResolved] = await Promise.all([
-    fetchStripeData(),
-    resolveClerkMrrForDashboard(users),
-  ]);
-
-  const stripePart = applyStripeMrrOverride(stripe.mrr);
-  const totalMrr = Math.round((stripePart.mrr + clerkResolved.clerkMrr) * 100) / 100;
-
-  return { stripe, stripePart, clerkResolved, totalMrr };
+export function isTrialUser(u: User) {
+  return u.clerk_subscription_status === "trialing" || u.stripe_subscription_status === "trialing";
 }
 
 export async function fetchPickSheetsAndParts() {

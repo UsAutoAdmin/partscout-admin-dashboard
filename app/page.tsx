@@ -3,10 +3,9 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import { MetricCard } from "@/components/MetricCard";
 import CommandCenter from "@/components/dashboard/CommandCenter";
 import {
-  fetchUsers, fetchRevenue, fetchPickSheetsAndParts, fetchAutomationRuns,
+  fetchUsers, fetchPickSheetsAndParts, fetchAutomationRuns,
   fetchScrapes, fetchInfra, computeUserMetrics, computeAutomationMetrics,
 } from "@/lib/data";
-import { fmt$ } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -36,8 +35,6 @@ export default async function Dashboard() {
     fetchPickSheetsAndParts(),
   ]);
 
-  const revenue = await fetchRevenue(users);
-
   const userMetrics = computeUserMetrics(users);
   const autoMetrics = computeAutomationMetrics(automationRuns);
 
@@ -47,16 +44,6 @@ export default async function Dashboard() {
     <DashboardLayout lastUpdated={lastUpdated} title="Dashboard">
       <div className="space-y-8">
         <CommandCenter />
-
-        {/* Revenue Overview */}
-        <SectionLink href="/revenue" title="Revenue">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <MetricCard label="MRR (Total)" value={fmt$(revenue.totalMrr)} color="success" subtext={`${fmt$(revenue.stripePart.mrr)} Stripe + ${fmt$(revenue.clerkResolved.clerkMrr)} Clerk`} />
-            <MetricCard label="Active Subs" value={revenue.stripe.activeSubs} color="success" subtext="Stripe" />
-            <MetricCard label="Revenue (30d)" value={fmt$(revenue.stripe.rev30d)} subtext={`${revenue.stripe.charges30d} charges`} color="success" />
-            <MetricCard label="Stripe Balance" value={fmt$(revenue.stripe.balance)} />
-          </div>
-        </SectionLink>
 
         {/* Users Overview */}
         <SectionLink href="/users" title="Users">

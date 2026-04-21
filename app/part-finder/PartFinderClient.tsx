@@ -41,6 +41,16 @@ interface Stats {
   avgSellPrice: number;
 }
 
+interface VerifyResult {
+  id: string;
+  activeCount: number;
+  soldCount: number;
+  newSellThrough: number;
+  originalSellThrough: number;
+  stChange: number;
+  consistent: boolean;
+}
+
 interface DetailData {
   part: ScoredPart;
   variations: Array<{
@@ -92,6 +102,8 @@ export default function PartFinderClient() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [approvedFilter, setApprovedFilter] = useState(false);
   const [minRatio, setMinRatio] = useState(3);
+  const [verifyResults, setVerifyResults] = useState<Record<string, VerifyResult>>({});
+  const [verifyingIds, setVerifyingIds] = useState<Set<string>>(new Set());
 
   const loadRows = useCallback(async () => {
     const params = new URLSearchParams({
@@ -125,6 +137,24 @@ export default function PartFinderClient() {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, approved: next }),
+    });
+  }, []);
+
+  const verifyPart = useCallback(async (id: string) => {
+    setVerifyingIds((prev) => new Set(prev).add(id));
+    try {
+      const res = await fetch("/api/part-finder/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const result: VerifyResult = await res.json();
+      setVerifyResults((prev) => ({ ...prev, [id]: result }));
+    } catch { /* keep existing state */ }
+    setVerifyingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
     });
   }, []);
 
@@ -264,6 +294,9 @@ export default function PartFinderClient() {
                   expanded={expandedId === row.id}
                   onToggle={() => expandRow(row.id)}
                   onApprove={toggleApprove}
+                  onVerify={verifyPart}
+                  verifying={verifyingIds.has(row.id)}
+                  verifyResult={verifyResults[row.id] ?? null}
                   detailData={expandedId === row.id ? detailData : null}
                   detailLoading={expandedId === row.id && detailLoading}
                 />
@@ -278,12 +311,15 @@ export default function PartFinderClient() {
 
 /* ───────────────────── Part Row ───────────────────── */
 
-function PartRow({ row, index, expanded, onToggle, onApprove, detailData, detailLoading }: {
+function PartRow({ row, index, expanded, onToggle, onApprove, onVerify, verifying, verifyResult, detailData, detailLoading }: {
   row: ScoredPart;
   index: number;
   expanded: boolean;
   onToggle: () => void;
   onApprove: (id: string, current: boolean) => void;
+  onVerify: (id: string) => void;
+  verifying: boolean;
+  verifyResult: VerifyResult | null;
   detailData: DetailData | null;
   detailLoading: boolean;
 }) {
@@ -332,16 +368,29 @@ function PartRow({ row, index, expanded, onToggle, onApprove, detailData, detail
         <Td align="right" border><ConfidencePill value={row.sold_confidence} /></Td>
         <Td align="right" className="tabular-nums font-semibold text-brand-600 dark:text-brand-400">{row.composite_score.toFixed(3)}</Td>
         <Td align="center" border>
-          <a
-            href={buildSoldUrl(row.search_term)}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 rounded-md bg-blue-light-50 dark:bg-blue-light-500/10 px-2 py-1 text-xs font-medium text-blue-light-600 dark:text-blue-light-400 hover:bg-blue-light-100 dark:hover:bg-blue-light-500/20 transition-colors"
-          >
-            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
-            <span className="sr-only">Verify</span>
-          </a>
+          {verifyResult ? (
+            <VerifyBadge result={verifyResult} />
+          ) : (
+            <button
+              onClick={(e) => { e.stopPropagation(); onVerify(row.id); }}
+              disabled={verifying}
+              className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors ${
+                verifying
+                  ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-wait"
+                  : "bg-blue-light-50 dark:bg-blue-light-500/10 text-blue-light-600 dark:text-blue-light-400 hover:bg-blue-light-100 dark:hover:bg-blue-light-500/20"
+              }`}
+            >
+              {verifying ? (
+                <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              )}
+              {verifying ? "" : "Verify"}
+            </button>
+          )}
         </Td>
       </tr>
       {expanded && (
@@ -522,6 +571,37 @@ function Td({ children, align, border, className }: {
     <td className={`px-2 py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"} ${border ? "border-l border-gray-200 dark:border-gray-800" : ""} ${className ?? ""}`}>
       {children}
     </td>
+  );
+}
+
+/* ───────────────────── Verify Badge ───────────────────── */
+
+function VerifyBadge({ result }: { result: VerifyResult }) {
+  const isGood = result.consistent;
+  const bg = isGood
+    ? "bg-success-50 dark:bg-success-500/10"
+    : "bg-error-50 dark:bg-error-500/10";
+  const text = isGood
+    ? "text-success-600 dark:text-success-400"
+    : "text-error-600 dark:text-error-400";
+  const icon = isGood ? (
+    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+  ) : (
+    <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+  );
+
+  const changeStr = `${result.stChange > 0 ? "+" : ""}${Math.round(result.stChange)}%`;
+
+  return (
+    <div className={`inline-flex flex-col items-center gap-0.5 rounded-md px-1.5 py-1 ${bg}`}>
+      <span className={`inline-flex items-center gap-0.5 text-[10px] font-bold ${text}`}>
+        {icon}
+        {Math.round(result.newSellThrough)}%
+      </span>
+      <span className={`text-[9px] font-medium ${text}`}>
+        {changeStr}
+      </span>
+    </div>
   );
 }
 

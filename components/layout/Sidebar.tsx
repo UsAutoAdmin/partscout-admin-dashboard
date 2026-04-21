@@ -12,14 +12,7 @@ const navItems = [
     ),
   },
   {
-    name: "Revenue",
-    path: "/revenue",
-    icon: (
-      <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M10 1.667v16.666M14.167 5H7.917a2.5 2.5 0 000 5h4.166a2.5 2.5 0 010 5H5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-    ),
-  },
-  {
-    name: "Users",
+    name: "CRM Pipeline",
     path: "/users",
     icon: (
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none"><path d="M13.333 17.5v-1.667a3.333 3.333 0 00-3.333-3.333H5a3.333 3.333 0 00-3.333 3.333V17.5M7.5 9.167a3.333 3.333 0 100-6.667 3.333 3.333 0 000 6.667zM18.333 17.5v-1.667A3.333 3.333 0 0015 12.833M13.333 2.833a3.333 3.333 0 010 6.334" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
@@ -104,6 +97,46 @@ const navItems = [
       <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
         <path d="M8.333 2.5a5.833 5.833 0 103.584 10.444l3.61 3.61a.833.833 0 001.179-1.178l-3.61-3.61A5.833 5.833 0 008.333 2.5zm0 1.667a4.167 4.167 0 110 8.333 4.167 4.167 0 010-8.333z" fill="currentColor"/>
         <path d="M8.333 6.667v3.333M6.667 8.333H10" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    name: "Part Review",
+    path: "/part-review",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M10 1.667l2.167 4.666 5.166.583-3.833 3.5 1.083 5.084L10 13.167 5.417 15.5l1.083-5.084-3.833-3.5 5.166-.583L10 1.667z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+      </svg>
+    ),
+  },
+  {
+    name: "Pipeline",
+    path: "/pipeline",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M1.667 5h5v3.333h-5V5zm6.666 0h5v3.333h-5V5zm6.667 0h3.333v3.333H15V5zM1.667 11.667h3.333V15H1.667v-3.333zm5 0h5V15h-5v-3.333zm6.666 0h5V15h-5v-3.333z" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M4.167 8.333v3.334M10 8.333v3.334M15.833 8.333v3.334" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    name: "Email Automation",
+    path: "/email-automation",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M2.5 5.833A1.667 1.667 0 014.167 4.167h11.666a1.667 1.667 0 011.667 1.666v8.334a1.667 1.667 0 01-1.667 1.666H4.167A1.667 1.667 0 012.5 14.167V5.833z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M2.5 6.667l7.5 5 7.5-5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M14.167 2.5l1 1.667M15.833 1.667l.833 1.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    name: "Virtual Assistant",
+    path: "/virtual-assistant",
+    icon: (
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M10 1.667a6.667 6.667 0 00-6.667 6.666v2.5L1.667 13.5v.833h16.666V13.5l-1.666-2.667v-2.5A6.667 6.667 0 0010 1.667z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+        <path d="M7.5 14.333a2.5 2.5 0 005 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     ),
   },
