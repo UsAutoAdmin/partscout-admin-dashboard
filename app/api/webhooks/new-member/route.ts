@@ -47,7 +47,13 @@ export async function POST(request: Request) {
 
   const parsed = parseSkoolNewMemberPayload(body);
   if ("error" in parsed) {
-    return NextResponse.json({ error: parsed.error }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: parsed.error,
+        webhooksUrl: "POST JSON must include a discoverable email + US zip (5 digits). In Zapier, map the Skool step fields into the custom request body (e.g. data.email, data.zip) or a flat object with those keys.",
+      },
+      { status: 400 },
+    );
   }
 
   const supabase = getServiceRoleClient();
