@@ -1,108 +1,41 @@
 /**
- * Pick-sheet email body builders.
- * Kept platform-agnostic so the same HTML is used for Gmail / future providers.
+ * Pick-sheet email body builders (Gmail and future providers).
+ * HTML is minimal — like a person typed the message, not a marketing layout — to stay
+ * aligned with the plain part and look natural in the inbox.
  */
 
-interface BuildEmailParams {
+/** Sum sell_price for “worth $X,XXX” in the member email. */
+export function sumSellPricesForWorthDollars(
+  parts: ReadonlyArray<{ sell_price: number | null }>,
+): number | null {
+  let s = 0;
+  for (const p of parts) {
+    if (typeof p.sell_price === "number" && p.sell_price > 0) s += p.sell_price;
+  }
+  if (s < 1) return null;
+  return Math.round(s);
+}
+
+export function formatCurrencyUsd(value: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+export interface BuildEmailParams {
   firstName: string;
-  shareUrl: string;
+  sharePath: string;
   appUrl: string;
-  communityName: string;
-  senderName: string;
-  customMessage?: string;
-}
-
-export function buildEmailHtml(params: BuildEmailParams): string {
-  const { firstName, shareUrl, appUrl, communityName, senderName, customMessage } = params;
-  const fullShareUrl = `${appUrl}${shareUrl}`;
-
-  const defaultMessage = `If you haven't flipped any parts watch the full free course in the community to get started. Come back to Part Scout once you've made some money, but don't wait too long as the founding membership with a lifetime price lock is limited.`;
-  const bodyMessage = customMessage || defaultMessage;
-
-  const messageLines = bodyMessage
-    .split("\n")
-    .filter((l) => l.trim())
-    .map(
-      (l) =>
-        `<p style="margin:0 0 16px;color:#1f2937;font-size:16px;line-height:1.7;">${escapeHtml(l.trim())}</p>`,
-    )
-    .join("");
-
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Your Pick Sheet is Ready</title>
-</head>
-<body style="margin:0;padding:0;background:#ffffff;font-family:Georgia,'Times New Roman',serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:48px 24px;">
-    <tr>
-      <td align="center">
-        <table width="560" cellpadding="0" cellspacing="0">
-          <tr>
-            <td style="padding:0;">
-
-              <p style="margin:0 0 16px;color:#1f2937;font-size:16px;line-height:1.7;">
-                Hey ${escapeHtml(firstName)}, thanks for being a member of ${escapeHtml(communityName)}. As promised, here is your custom pick sheet for your local junkyard should you decide to be a founding member of Part Scout.
-              </p>
-
-              <p style="margin:0 0 16px;">
-                <a href="${fullShareUrl}"
-                   style="color:#2563eb;font-size:16px;line-height:1.7;word-break:break-all;font-family:Georgia,'Times New Roman',serif;">
-                  ${escapeHtml(fullShareUrl)}
-                </a>
-              </p>
-
-              ${messageLines}
-
-              <p style="margin:32px 0 0;color:#1f2937;font-size:16px;line-height:1.7;">
-                Best,<br/>
-                ${escapeHtml(senderName)}
-              </p>
-
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-}
-
-interface BuildPlainTextParams {
-  firstName: string;
-  fullShareUrl: string;
-  yardName: string;
-  yardCity: string;
-  yardState: string;
   partCount: number;
-  vehicleCount: number;
+  partTotalWorthDollars: number | null;
   communityName: string;
   senderName: string;
   customMessage?: string;
 }
 
-export function buildPlainText(params: BuildPlainTextParams): string {
-  const defaultMessage = `If you haven't flipped any parts watch the full free course in the community to get started. Come back to Part Scout once you've made some money, but don't wait too long as the founding membership with a lifetime price lock is limited.`;
-  const bodyMessage = params.customMessage || defaultMessage;
-  return [
-    `Hey ${params.firstName},`,
-    ``,
-    `Thanks for being a member of ${params.communityName}. As promised, here is your custom pick sheet for your local junkyard should you decide to be a founding member of Part Scout.`,
-    ``,
-    params.fullShareUrl,
-    ``,
-    `Your custom pick sheet for ${params.yardName} in ${params.yardCity}, ${params.yardState} is ready.`,
-    `${params.partCount} parts across ${params.vehicleCount} vehicles.`,
-    ``,
-    bodyMessage,
-    ``,
-    `Best,`,
-    params.senderName,
-  ].join("\n");
-}
+type BodyBlock = { type: "line"; text: string } | { type: "link"; href: string };
 
 function escapeHtml(s: string): string {
   return s
@@ -111,4 +44,124 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/**
+ * One ordered list of blocks — used to build both plain and HTML so they match.
+ */
+function buildBodyBlocks(p: BuildEmailParams & { fullShareUrl: string }): BodyBlock[] {
+  const d = (p.firstName || "there").trim() || "there";
+  const worthLine =
+    p.partTotalWorthDollars != null && p.partTotalWorthDollars > 0
+      ? `I researched your local yard for you and found ${p.partCount} parts worth ${formatCurrencyUsd(p.partTotalWorthDollars)}.`
+      : `I researched your local yard for you and found ${p.partCount} parts.`;
+
+  const blocks: BodyBlock[] = [
+    { type: "line", text: `Hey, ${d}` },
+    { type: "line", text: worthLine },
+    {
+      type: "line",
+      text:
+        "Here is your custom pick sheet link. You can get a free trial to access it and generate unlimited additional pick sheets for U-Pull style yards in your area.",
+    },
+    { type: "line", text: "Here is your pick sheet:" },
+    { type: "link", href: p.fullShareUrl },
+    {
+      type: "line",
+      text:
+        "Try to get to the parts as soon as possible as these highly profitable ones get grabbed the quickest.",
+    },
+    {
+      type: "line",
+      text: `In the meantime I have also invited you to the ${p.communityName} community of auto part flippers. Inside there is a full course on how I flip parts, and a static list of 100 parts I've recently sold. This is totally free no card or anything.`,
+    },
+  ];
+
+  if (p.customMessage?.trim()) {
+    for (const line of p.customMessage.split("\n")) {
+      const t = line.trim();
+      if (t) blocks.push({ type: "line", text: t });
+    }
+  }
+
+  blocks.push({ type: "line", text: "Best," }, { type: "line", text: p.senderName });
+  return blocks;
+}
+
+const P_STYLE =
+  "margin:0 0 1em 0;padding:0;font-size:15px;line-height:1.55;color:#202124;";
+
+const LINK_STYLE = "color:#1a0dab;text-decoration:underline;word-break:break-all;";
+
+export function buildEmailHtml(params: BuildEmailParams): string {
+  const relPath = params.sharePath.startsWith("/") ? params.sharePath : `/${params.sharePath}`;
+  const appUrl = params.appUrl.replace(/\/$/, "");
+  const fullShareUrl = `${appUrl}${relPath}`;
+  const community =
+    params.communityName?.trim() || process.env.EMAIL_COMMUNITY_NAME || "Auto Salvage Hub";
+  const sender =
+    params.senderName?.trim() || process.env.EMAIL_SENDER_NAME || "Chase Eriksson";
+
+  const blocks = buildBodyBlocks({
+    ...params,
+    communityName: community,
+    senderName: sender,
+    fullShareUrl,
+  });
+
+  const inner = blocks
+    .map((b) => {
+      if (b.type === "line") {
+        return `<p style="${P_STYLE}">${escapeHtml(b.text).replace(/\n/g, "<br>")}</p>`;
+      }
+      return `<p style="margin:0 0 1em 0;padding:0"><a href="${escapeHtml(b.href)}" style="${LINK_STYLE}">${escapeHtml(
+        b.href,
+      )}</a></p>`;
+    })
+    .join("");
+
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+</head>
+<body style="margin:0;padding:0;">
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;padding:8px 4px;max-width:100%;">
+${inner}
+</div>
+</body>
+</html>`;
+}
+
+export interface BuildPlainTextParams {
+  firstName: string;
+  fullShareUrl: string;
+  partCount: number;
+  partTotalWorthDollars: number | null;
+  communityName: string;
+  senderName: string;
+  customMessage?: string;
+}
+
+export function buildPlainText(params: BuildPlainTextParams): string {
+  const community =
+    params.communityName?.trim() || process.env.EMAIL_COMMUNITY_NAME || "Auto Salvage Hub";
+  const sender =
+    params.senderName?.trim() || process.env.EMAIL_SENDER_NAME || "Chase Eriksson";
+
+  const bodyBlocks = buildBodyBlocks({
+    firstName: params.firstName,
+    sharePath: "",
+    appUrl: "",
+    partCount: params.partCount,
+    partTotalWorthDollars: params.partTotalWorthDollars,
+    communityName: community,
+    senderName: sender,
+    customMessage: params.customMessage,
+    fullShareUrl: params.fullShareUrl,
+  });
+
+  return bodyBlocks
+    .map((b) => (b.type === "line" ? b.text : b.href))
+    .join("\n\n");
 }

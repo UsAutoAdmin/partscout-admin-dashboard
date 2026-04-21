@@ -5,7 +5,10 @@ import { createPickSheetForNewMember } from "@/lib/new-member/pick-sheet";
 import type { ParsedNewMemberPayload } from "@/lib/new-member/parse-zap-payload";
 import { toE164 } from "@/lib/new-member/phone-e164";
 import { sendTwilioSms } from "@/lib/sms/twilio-send";
+import { sumSellPricesForWorthDollars } from "@/lib/email-templates";
+import { pickSheetEmailSalutationFirstName } from "@/lib/new-member/salutation-first-name";
 import { sendPickSheetGmail } from "@/lib/new-member/send-pick-sheet-email";
+import { isNewMemberEmailBlocked } from "@/lib/new-member/blocked-emails";
 
 function publicAppOrigin(): string {
   const raw =
@@ -67,6 +70,13 @@ export async function executeNewMemberWebhook(
   parsed: ParsedNewMemberPayload,
 ): Promise<NewMemberWebhookResult> {
   const { email, phone, firstName, lastName, zip } = parsed;
+  if (isNewMemberEmailBlocked(email)) {
+    return {
+      kind: "success",
+      status: 200,
+      body: { ok: true, skipped: true, reason: "new_member_blocklist" },
+    };
+  }
   const memberName = [firstName, lastName].filter(Boolean).join(" ").trim() || email;
   const supabase = getServiceRoleClient();
 
@@ -158,6 +168,7 @@ export async function executeNewMemberWebhook(
 
   const origin = publicAppOrigin();
   const fullShareUrl = `${origin}${sheet.sharePath}`;
+  const partTotalWorthDollars = sumSellPricesForWorthDollars(sheet.matchedParts);
 
   await supabase
     .from("new_member_automation_runs")
@@ -172,6 +183,7 @@ export async function executeNewMemberWebhook(
       share_url: fullShareUrl,
       automation_yard_city: yardResult.yard.city,
       automation_yard_state: yardResult.yard.state,
+      automation_estimated_worth: partTotalWorthDollars,
     })
     .eq("id", runId);
 
@@ -215,12 +227,11 @@ export async function executeNewMemberWebhook(
         yardCity: yardResult.yard.city,
         yardState: yardResult.yard.state,
         partCount,
-        vehicleCount: sheet.vehicleCount,
+        partTotalWorthDollars,
         customMessage: process.env.EMAIL_PICKSHEET_CUSTOM_MESSAGE?.trim() || undefined,
         crmTracking: newMemberCrmTracking(),
         phone: phone ?? undefined,
         zip: zip,
-        includeAdminBcc: true,
       });
       if (sendResult.ok) {
         const now = new Date().toISOString();
@@ -264,7 +275,10 @@ export async function executeNewMemberWebhook(
   const smsOk = smsNotificationsEnabled();
 
   if (e164 && smsOk) {
-    const message = smsBody(firstName, fullShareUrl);
+    const message = smsBody(
+      pickSheetEmailSalutationFirstName(firstName, lastName),
+      fullShareUrl,
+    );
     const twilioFromVercel =
       process.env.SMS_SEND_FROM_VERCEL_TWILIO === "1" ||
       process.env.SMS_SEND_FROM_VERCEL_TWILIO === "true";

@@ -21,7 +21,7 @@ export async function sendPickSheetGmailForRunId(runId: string): Promise<PickEma
   const { data: run, error } = await supabase
     .from("new_member_automation_runs")
     .select(
-      "id, status, share_url, email_sent_at, member_email, member_first_name, member_last_name, member_zip_code, nearest_yard_name, parts_matched, vehicles_extracted, automation_yard_city, automation_yard_state",
+      "id, status, share_url, email_sent_at, member_email, member_first_name, member_last_name, member_zip_code, nearest_yard_name, parts_matched, vehicles_extracted, automation_yard_city, automation_yard_state, automation_estimated_worth",
     )
     .eq("id", runId)
     .maybeSingle();
@@ -52,6 +52,12 @@ export async function sendPickSheetGmailForRunId(runId: string): Promise<PickEma
   const yardDisplay = String(run.nearest_yard_name);
   const city = (run.automation_yard_city as string | null) ?? "";
   const state = (run.automation_yard_state as string | null) ?? "";
+  const rawWorth = run.automation_estimated_worth;
+  let partTotalWorthDollars: number | null = null;
+  if (rawWorth != null) {
+    const n = typeof rawWorth === "number" ? rawWorth : Number(rawWorth);
+    if (Number.isFinite(n) && n > 0) partTotalWorthDollars = Math.round(n);
+  }
 
   const send = await sendPickSheetGmail({
     to: run.member_email as string,
@@ -62,12 +68,11 @@ export async function sendPickSheetGmailForRunId(runId: string): Promise<PickEma
     yardCity: city,
     yardState: state,
     partCount: run.parts_matched as number,
-    vehicleCount: run.vehicles_extracted as number,
+    partTotalWorthDollars,
     customMessage: process.env.EMAIL_PICKSHEET_CUSTOM_MESSAGE?.trim() || undefined,
     crmTracking: newMemberCrmTracking(),
     phone: undefined,
     zip: (run.member_zip_code as string | null) || undefined,
-    includeAdminBcc: true,
   });
 
   if (!send.ok) {

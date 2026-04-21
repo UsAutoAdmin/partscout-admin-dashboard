@@ -73,6 +73,8 @@ function buildFlatSource(root: Record<string, unknown>): Record<string, unknown>
           if (!out.firstName) out.firstName = val;
         } else if (key && (key.includes("last") && key.includes("name"))) {
           if (!out.lastName) out.lastName = val;
+        } else if (key && (key.includes("full") && key.includes("name"))) {
+          if (!out.fullname) out.fullname = val;
         }
         if (EMAIL_RE.test(val) && !out.email) out.email = val;
         const zm = val.match(US_ZIP_RE);
@@ -164,11 +166,21 @@ export function parseSkoolNewMemberPayload(body: unknown):
     "user_zip",
     "location_zip",
   );
+  const fullName = pick(
+    src,
+    "fullName",
+    "fullname",
+    "full_name",
+    "Fullname",
+    "Full name",
+    "FULL_NAME",
+  );
   const firstName = pick(
     src,
     "firstName",
     "first_name",
     "FirstName",
+    "First name",
     "fname",
     "firstname",
     "given_name",
@@ -216,11 +228,14 @@ export function parseSkoolNewMemberPayload(body: unknown):
     };
   }
 
+  // Facebook lead forms (and others) often send a single "Full name" field; we put the
+  // full string in firstName and leave lastName empty (Skool / separate fields still work).
+  const useFull = Boolean(fullName?.trim());
   return {
     email: outEmail.toLowerCase(),
     phone: phoneRaw ? phoneRaw : null,
-    firstName,
-    lastName,
+    firstName: useFull ? fullName.trim() : firstName,
+    lastName: useFull ? "" : lastName,
     zip: outZip,
   };
 }

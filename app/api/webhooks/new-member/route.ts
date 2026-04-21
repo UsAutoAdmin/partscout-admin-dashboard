@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { getServiceRoleClient } from "@/lib/supabase";
+import { isNewMemberEmailBlocked } from "@/lib/new-member/blocked-emails";
 import { parseSkoolNewMemberPayload } from "@/lib/new-member/parse-zap-payload";
 import { scheduleDequeueFromBaseUrl } from "@/lib/new-member/trigger-dequeue";
 
@@ -95,6 +96,15 @@ export async function POST(request: Request) {
         },
         { status: 400 },
       );
+    }
+
+    if (isNewMemberEmailBlocked(parsed.email)) {
+      return NextResponse.json({
+        ok: true,
+        queued: false,
+        skipped: true,
+        reason: "new_member_blocklist",
+      });
     }
 
     const supabase = getServiceRoleClient();

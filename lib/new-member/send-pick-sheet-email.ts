@@ -3,15 +3,7 @@ import { isGmailOutboundConfigured, missingGmailOutboundEnv, sendGmailHtmlEmail 
 import { getServiceRoleClient } from "@/lib/supabase";
 import { prepareCrmTrackedSend } from "@/lib/crm/prepare-tracked-send";
 import { buildEmailHtml, buildPlainText } from "@/lib/email-templates";
-
-const DEFAULT_PICKSHEET_NOTIFY = "chaseeriksson@gmail.com";
-
-function adminNotifyBccForPickSheet(): string | undefined {
-  const v = process.env.PICKSHEET_AUTOMATION_NOTIFY_EMAIL?.trim();
-  if (v === "0" || v === "false" || v === "off" || v === "none") return undefined;
-  if (v) return v;
-  return DEFAULT_PICKSHEET_NOTIFY;
-}
+import { pickSheetEmailSalutationFirstName } from "@/lib/new-member/salutation-first-name";
 
 export type SendPickSheetEmailInput = {
   to: string;
@@ -23,15 +15,14 @@ export type SendPickSheetEmailInput = {
   yardCity: string;
   yardState: string;
   partCount: number;
-  vehicleCount: number;
+  /** Sum of matched sell_price (for “worth $X” line); null omits dollar amount. */
+  partTotalWorthDollars?: number | null;
   customMessage?: string;
   communityName?: string;
   senderName?: string;
   crmTracking?: boolean;
   phone?: string;
   zip?: string;
-  /** New-member (and other) automation: Bcc a copy to the admin inbox. */
-  includeAdminBcc?: boolean;
 };
 
 export type SendPickSheetEmailResult =
@@ -54,15 +45,16 @@ export async function sendPickSheetGmail(
     yardCity,
     yardState,
     partCount,
-    vehicleCount,
+    partTotalWorthDollars = null,
     customMessage,
     communityName,
     senderName,
     crmTracking = true,
     phone,
     zip,
-    includeAdminBcc = false,
   } = input;
+
+  const greetingName = pickSheetEmailSalutationFirstName(firstName, lastName);
 
   const appUrl =
     process.env.SHARE_BASE_URL || process.env.NEXT_PUBLIC_APP_URL || "https://partscout.app";
@@ -70,26 +62,25 @@ export async function sendPickSheetGmail(
   const fullShareUrl = `${appUrl.replace(/\/$/, "")}${relPath}`;
 
   const community =
-    communityName?.trim() || process.env.EMAIL_COMMUNITY_NAME || "the community";
-  const sender = senderName?.trim() || process.env.EMAIL_SENDER_NAME || "Part Scout";
+    communityName?.trim() || process.env.EMAIL_COMMUNITY_NAME || "Auto Salvage Hub";
+  const sender = senderName?.trim() || process.env.EMAIL_SENDER_NAME || "Chase Eriksson";
 
   const html = buildEmailHtml({
-    firstName,
-    shareUrl: relPath,
+    firstName: greetingName,
+    sharePath: relPath,
     appUrl,
+    partCount,
+    partTotalWorthDollars: partTotalWorthDollars ?? null,
     communityName: community,
     senderName: sender,
     customMessage,
   });
   const subject = `Your Custom Pick Sheet for ${yardNameForSubject}`;
   const text = buildPlainText({
-    firstName,
+    firstName: greetingName,
     fullShareUrl,
-    yardName: yardNameForSubject,
-    yardCity,
-    yardState,
     partCount,
-    vehicleCount,
+    partTotalWorthDollars: partTotalWorthDollars ?? null,
     communityName: community,
     senderName: sender,
     customMessage,
@@ -163,14 +154,12 @@ export async function sendPickSheetGmail(
   }
 
   try {
-    const bcc = includeAdminBcc ? adminNotifyBccForPickSheet() : undefined;
     const { id } = await sendGmailHtmlEmail({
       to,
       subject,
       html: sendHtml,
       text,
       fromDisplayName: sender,
-      bcc,
     });
     return { ok: true, messageId: id, crmTracked, crmMessageId };
   } catch (err) {
