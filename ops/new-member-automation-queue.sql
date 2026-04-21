@@ -1,4 +1,4 @@
--- Run in Supabase SQL editor (once). Stores Zapier payloads for local workers to process.
+-- Run once in Supabase SQL editor (if not already applied).
 
 create table if not exists public.new_member_automation_queue (
   id uuid primary key default gen_random_uuid(),
@@ -14,5 +14,3 @@ create table if not exists public.new_member_automation_queue (
 create index if not exists new_member_automation_queue_pending_idx
   on public.new_member_automation_queue (created_at asc)
   where status = 'pending';
-
-comment on table public.new_member_automation_queue is 'Vercel INSERT-only; Mac polls and runs executeNewMemberWebhook';

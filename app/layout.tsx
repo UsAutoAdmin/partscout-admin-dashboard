@@ -1,24 +1,15 @@
 import type { Metadata } from "next";
-import { Outfit } from "next/font/google";
-import { ThemeProvider } from "@/lib/theme";
 import "./globals.css";
 
-const outfit = Outfit({
-  subsets: ["latin"],
-  variable: "--font-outfit",
-});
-
 export const metadata: Metadata = {
-  title: "Part Scout — Admin Dashboard",
-  description: "Business metrics dashboard",
+  title: "Part Scout — API",
+  description: "Serverless hooks (webhooks, tracking)",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${outfit.variable} font-outfit`}>
-        <ThemeProvider>{children}</ThemeProvider>
-      </body>
+    <html lang="en">
+      <body style={{ margin: 0, fontFamily: "system-ui, sans-serif", padding: "2rem" }}>{children}</body>
     </html>
   );
 }
