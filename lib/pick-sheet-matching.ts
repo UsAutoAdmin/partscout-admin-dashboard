@@ -154,7 +154,7 @@ async function batchFetchFitmentCache(
     return buildEmptyCache(userParts);
   }
 
-  const uniqueRefIds = [...new Set(allRefRows.map((r) => r.id))];
+  const uniqueRefIds = Array.from(new Set(allRefRows.map((r) => r.id)));
   const allSubCategories = await chunkedIn<SubCategory>(
     supabase,
     "2 Fitment Subcategory",
@@ -163,7 +163,7 @@ async function batchFetchFitmentCache(
     uniqueRefIds,
   );
 
-  const uniqueSubIds = [...new Set(allSubCategories.map((s) => s.id))];
+  const uniqueSubIds = Array.from(new Set(allSubCategories.map((s) => s.id)));
   const allFitmentVehicles = await chunkedIn<FitmentVehicle>(
     supabase,
     "4 fitment_vehicles",

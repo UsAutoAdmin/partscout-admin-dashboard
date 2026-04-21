@@ -153,10 +153,6 @@ async function fetchAllPaged<T>(table: string, columns: string, pageSize = 1000)
   return results;
 }
 
-function dayKey(iso: string): string {
-  return iso.slice(0, 10);
-}
-
 function buildHeatmap(events: { created_at: string }[]): { byDay: number[]; lastAt: string | null; total: number; total30d: number } {
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);

@@ -45,14 +45,6 @@ function fmtTime(iso: string): string {
   });
 }
 
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-  });
-}
-
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(diff / 60_000);
@@ -89,7 +81,6 @@ function HeatmapGrid({
   selectedRunId: string | null;
 }) {
   const byDate = groupByDate(runs);
-  const sortedDates = Array.from(byDate.keys()).sort();
 
   // Fill in missing dates for last 30 days
   const today = new Date();
@@ -107,8 +98,6 @@ function HeatmapGrid({
         {allDates.map((date) => {
           const dayRuns = byDate.get(date) ?? [];
           const hasRuns = dayRuns.length > 0;
-          const allOk = dayRuns.every((r) => r.ok);
-          const anyFailed = dayRuns.some((r) => !r.ok);
 
           return (
             <div key={date} className="flex flex-col items-center gap-0.5">

@@ -99,7 +99,7 @@ export default function ReleaseQueueTable({ payload }: { payload: ReleaseQueuePa
   const makeOptions = useMemo(() => {
     const counts = new Map<string, number>();
     for (const p of parts) counts.set(p.make, (counts.get(p.make) ?? 0) + 1);
-    return [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    return Array.from(counts.entries()).sort((a, b) => b[1] - a[1]);
   }, [parts]);
 
   const filtered = useMemo(() => {
