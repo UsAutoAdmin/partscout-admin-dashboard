@@ -1,9 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { getServiceRoleClient } from "@/lib/supabase";
 
 export interface PriceCard {
   id: string;
@@ -196,6 +191,7 @@ let cachedPartNames: CatalogEntry[] | null = null;
 async function loadPartCatalog(): Promise<CatalogEntry[]> {
   if (cachedPartNames) return cachedPartNames;
 
+  const supabase = getServiceRoleClient();
   const { data, error } = await supabase
     .from("lkq_prices")
     .select("id, part_name, price, yard_location, storage_path, metadata, priority")
