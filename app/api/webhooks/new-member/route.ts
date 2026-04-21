@@ -8,9 +8,12 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 800;
 
 function verifySkoolSecret(request: Request): boolean {
-  const secret = process.env.SKOOL_WEBHOOK_SECRET?.trim();
+  const secret = (
+    process.env.SKOOL_WEBHOOK_SECRET ||
+    process.env.NEW_MEMBER_WEBHOOK_SECRET
+  )?.trim();
   if (!secret) {
-    console.error("[webhooks/new-member] SKOOL_WEBHOOK_SECRET is not set");
+    console.error("[webhooks/new-member] set SKOOL_WEBHOOK_SECRET or NEW_MEMBER_WEBHOOK_SECRET");
     return false;
   }
   const auth = request.headers.get("authorization");
